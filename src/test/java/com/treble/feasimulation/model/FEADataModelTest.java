@@ -1,0 +1,71 @@
+package com.treble.feasimulation.model;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class FEADataModelTest {
+
+    @Test
+    public void testNodeCreationAndUpdate() {
+        FEAData d = new FEAData();
+        Node n = new Node(1, 10.0, 20.0);
+        d.addNode(n);
+        assertTrue(d.findNodeById(1).isPresent());
+        Node updated = new Node(1, 15.0, 25.0);
+        boolean ok = d.updateNode(updated);
+        assertTrue(ok);
+        Node r = d.findNodeById(1).get();
+        assertEquals(15.0, r.getX(), 1e-9);
+        assertEquals(25.0, r.getY(), 1e-9);
+    }
+
+    @Test
+    public void testBeamCreationBetweenExistingNodes() {
+        FEAData d = new FEAData();
+        d.addNode(new Node(1, 0.0, 0.0));
+        d.addNode(new Node(2, 1.0, 0.0));
+        BeamElement be = new BeamElement(1, 1, 2, 0, 1.0, 1e-6);
+        d.addElement(be);
+        assertEquals(1, d.getElements().size());
+        BeamElement stored = d.getElements().get(0);
+        assertEquals(1, stored.getNodeStartId());
+        assertEquals(2, stored.getNodeEndId());
+    }
+
+    @Test
+    public void testDeletionCascade() {
+        FEAData d = new FEAData();
+        d.addNode(new Node(1, 0.0, 0.0));
+        d.addNode(new Node(2, 1.0, 0.0));
+        d.addElement(new BeamElement(1, 1, 2, 0, 1.0, 1e-6));
+        d.addSupport(new Support(1, 1, Support.Type.FIXED));
+        d.addPointLoad(new PointLoad(1, 2, 0.0, -1000.0));
+
+        assertEquals(1, d.getElements().size());
+        assertEquals(1, d.getSupports().size());
+        assertEquals(1, d.getPointLoads().size());
+
+        boolean removed = d.removeNodeById(1);
+        assertTrue(removed);
+        // element referencing node 1 should be removed
+        assertEquals(0, d.getElements().size());
+        // support attached to node1 removed
+        assertEquals(0, d.getSupports().size());
+        // pointload at node2 should remain
+        assertEquals(1, d.getPointLoads().size());
+    }
+
+    @Test
+    public void testSupportsAddRemove() {
+        FEAData d = new FEAData();
+        d.addNode(new Node(1, 0.0, 0.0));
+        Support s1 = new Support(1, 1, Support.Type.FIXED);
+        Support s2 = new Support(2, 1, Support.Type.ROLLER);
+        d.addSupport(s1);
+        d.addSupport(s2);
+        assertEquals(2, d.getSupports().size());
+        assertTrue(d.removeSupportById(1));
+        assertEquals(1, d.getSupports().size());
+    }
+}
