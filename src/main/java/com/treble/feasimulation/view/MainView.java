@@ -10,6 +10,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.geometry.Insets;
 
@@ -27,6 +28,7 @@ public class MainView {
     private final TextField loadAngleField;
     private final Button applyLoadButton;
     private final Button runButton;
+    private final TextArea explanationArea;
 
     public MainView(double width, double height) {
         // Menu
@@ -60,17 +62,24 @@ public class MainView {
 
         Button runButton = new Button("Run Simulation");
 
+        TextArea explanationArea = new TextArea();
+        explanationArea.setEditable(false);
+        explanationArea.setWrapText(true);
+        explanationArea.setPrefRowCount(8);
+        explanationArea.setPromptText("Result explanation will appear here.");
+
         VBox side = new VBox(8,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Point Load magnitude:"), loadMagnitudeField,
                 new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField, applyLoadButton,
-                new Label(""), runButton);
+                new Label(""), runButton, new Label("Analysis Explanation:"), explanationArea);
         side.setPadding(new Insets(8));
-        side.setPrefWidth(220);
+        side.setPrefWidth(320);
         root.setRight(side);
 
-        // expose run button
+        // expose run button and explanation area
         this.runButton = runButton;
+        this.explanationArea = explanationArea;
     }
 
     public BorderPane getRoot() { return root; }
@@ -86,4 +95,5 @@ public class MainView {
     public TextField getLoadAngleField() { return loadAngleField; }
     public Button getApplyLoadButton() { return applyLoadButton; }
     public Button getRunButton() { return runButton; }
+    public TextArea getExplanationArea() { return explanationArea; }
 }

@@ -3,6 +3,8 @@ package com.treble.feasimulation.presenter;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.view.BeamCanvasView;
 import com.treble.feasimulation.view.MainView;
+import com.treble.feasimulation.service.ResultExplanationService;
+import com.treble.feasimulation.solver.BeamSolver;
 import javafx.application.Platform;
 
 public class MainPresenter implements Presenter {
@@ -49,11 +51,16 @@ public class MainPresenter implements Presenter {
         // Run simulation
         view.getRunButton().setOnAction(e -> {
             try {
-                com.treble.feasimulation.solver.BeamSolver solver = new com.treble.feasimulation.solver.BeamSolver();
-                com.treble.feasimulation.solver.BeamSolver.Result r = solver.solve(model);
+                BeamSolver solver = new BeamSolver();
+                BeamSolver.Result r = solver.solve(model);
                 // choose a visual scale (pixels per meter). Provide a simple heuristic
                 double scale = 100.0; // user-adjustable later
                 canvasView.showResult(r, scale);
+
+                // generate plain-English explanation and show in side panel
+                ResultExplanationService expl = new ResultExplanationService();
+                String explanation = expl.explain(r, model);
+                view.getExplanationArea().setText(explanation);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
