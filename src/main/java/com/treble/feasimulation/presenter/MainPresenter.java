@@ -43,6 +43,19 @@ public class MainPresenter implements Presenter {
             view.getExplanationArea().clear();
         });
 
+        // Element drawing
+        view.getDrawElementButton().setOnAction(e -> {
+            canvasView.setMode(BeamCanvasView.Mode.DRAW);
+            String type = view.getElementTypeChoice().getValue();
+            if ("Truss Member".equals(type)) {
+                canvasView.setPlacingElementType(BeamCanvasView.ElementType.TRUSS);
+            } else if ("Polygon".equals(type)) {
+                canvasView.setPlacingElementType(BeamCanvasView.ElementType.POLYGON);
+            } else {
+                canvasView.setPlacingElementType(BeamCanvasView.ElementType.BEAM);
+            }
+        });
+
         // Support placement
         view.getPlaceSupportButton().setOnAction(e -> {
             String sel = view.getSupportTypeChoice().getValue();

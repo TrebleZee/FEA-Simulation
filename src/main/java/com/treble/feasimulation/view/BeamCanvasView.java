@@ -23,6 +23,15 @@ import com.treble.feasimulation.model.PointLoad;
 
 public class BeamCanvasView {
     public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, NONE }
+    public enum ElementType { BEAM, TRUSS, POLYGON }
+
+    private interface CanvasTool {
+        void onClick(Point2D p, MouseEvent e);
+        void onDrag(Point2D p, MouseEvent e);
+        void onMove(Point2D p, MouseEvent e);
+        void onRelease(Point2D p, MouseEvent e);
+        void drawOverlay(GraphicsContext g);
+    }
 
     private static class SegmentProjection {
         final Point2D point;
@@ -50,13 +59,12 @@ public class BeamCanvasView {
     private final FEAData model;
 
     private Mode mode = Mode.DRAW;
+    private ElementType activeElementType = ElementType.BEAM;
+    private CanvasTool activeTool;
     private Support.Type placingSupportType = Support.Type.FIXED;
     private int placingBeamMaterialId = MaterialLibrary.getDefaultMaterial().getId();
     private double placingLoadMagnitude = 0.0;
     private double placingLoadAngleDeg = 270.0;
-
-    private Integer tempStartNodeId = null;
-    private double tempStartX, tempStartY;
 
     private Integer draggingNodeId = null;
 
@@ -74,6 +82,7 @@ public class BeamCanvasView {
         this.model = model;
         clear();
         installHandlers();
+        updateActiveTool(); // initialize active tool
         redraw();
     }
 
@@ -86,96 +95,22 @@ public class BeamCanvasView {
     }
 
     private void onMouseClicked(MouseEvent e) {
-        if (e.getButton() != MouseButton.PRIMARY) return;
-        Point2D p = new Point2D(e.getX(), e.getY());
-
-        // Modes: place support, place load, or draw beams
-        if (mode == Mode.PLACE_SUPPORT) {
-            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
-            int nodeId;
-            if (nearNode >= 0) {
-                nodeId = nearNode;
-            } else {
-                nodeId = model.nextNodeId();
-                model.addNode(new Node(nodeId, p.getX(), p.getY()));
-            }
-            int sid = model.nextSupportId();
-            Support s = new Support(sid, nodeId, placingSupportType);
-            model.addSupport(s);
-            redraw();
-            e.consume();
-            return;
+        if (activeTool != null) {
+            activeTool.onClick(new Point2D(e.getX(), e.getY()), e);
         }
-
-        if (mode == Mode.PLACE_LOAD) {
-            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
-            int nodeId;
-            if (nearNode >= 0) {
-                nodeId = nearNode;
-            } else {
-                java.util.Optional<ElementHit> hit = findNearestElementHit(p, HIT_TOLERANCE);
-                if (hit.isEmpty()) {
-                    return;
-                }
-                nodeId = model.splitElementAtPoint(hit.get().elementId,
-                        hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
-            }
-            // convert magnitude & angle to fx, fy (y screen grows downwards so invert sin)
-            double rad = Math.toRadians(placingLoadAngleDeg);
-            double fx = placingLoadMagnitude * Math.cos(rad);
-            double fy = -placingLoadMagnitude * Math.sin(rad);
-            int lid = model.nextPointLoadId();
-            PointLoad pl = new PointLoad(lid, nodeId, fx, fy);
-            model.addPointLoad(pl);
-            redraw();
-            e.consume();
-            return;
-        }
-
-        // Default: drawing beams
-        int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
-        if (tempStartNodeId == null) {
-            if (nearNode >= 0) {
-                tempStartNodeId = nearNode;
-                Node n = model.findNodeById(nearNode).orElseThrow();
-                tempStartX = n.getX(); tempStartY = n.getY();
-            } else {
-                int nid = model.nextNodeId();
-                Node n = new Node(nid, p.getX(), p.getY());
-                model.addNode(n);
-                tempStartNodeId = nid;
-                tempStartX = p.getX(); tempStartY = p.getY();
-            }
-            redraw();
-        } else {
-            int endNodeId;
-            if (nearNode >= 0) {
-                endNodeId = nearNode;
-            } else {
-                endNodeId = model.nextNodeId();
-                Node n = new Node(endNodeId, p.getX(), p.getY());
-                model.addNode(n);
-            }
-
-            // Create beam element
-            int eid = model.nextElementId();
-            BeamElement be = new BeamElement(eid, tempStartNodeId, endNodeId, placingBeamMaterialId, 1.0, 1.0);
-            model.addElement(be);
-
-            tempStartNodeId = null;
-            redraw();
-        }
-        e.consume();
     }
 
     private void onMousePressed(MouseEvent e) {
+        if (activeTool != null) {
+            activeTool.onDrag(new Point2D(e.getX(), e.getY()), e); // pressed starts drag
+        }
         if (e.getButton() == MouseButton.SECONDARY) {
             // Right-click: show context menu for element deletion
             Point2D p = new Point2D(e.getX(), e.getY());
             Integer elId = findNearestElementId(p, HIT_TOLERANCE);
             ContextMenu menu = new ContextMenu();
             if (elId != null) {
-                MenuItem delete = new MenuItem("Delete Beam");
+                MenuItem delete = new MenuItem("Delete Element");
                 delete.setOnAction(ae -> {
                     model.removeElementById(elId);
                     redraw();
@@ -227,30 +162,31 @@ public class BeamCanvasView {
     }
 
     private void onMouseDragged(MouseEvent e) {
+        Point2D p = new Point2D(e.getX(), e.getY());
+        if (activeTool != null) {
+            activeTool.onDrag(p, e);
+        }
         if (draggingNodeId != null) {
             // Update node position
             Node updated = new Node(draggingNodeId, e.getX(), e.getY());
             model.updateNode(updated);
             redraw();
             e.consume();
-        } else if (tempStartNodeId != null) {
-            // while drawing temporary beam, show rubberband
-            redraw();
-            GraphicsContext g = canvas.getGraphicsContext2D();
-            g.setStroke(Color.GRAY);
-            g.setLineDashes(5);
-            g.strokeLine(tempStartX, tempStartY, e.getX(), e.getY());
-            g.setLineDashes(0);
-            e.consume();
         }
     }
 
     private void onMouseReleased(MouseEvent e) {
+        if (activeTool != null) {
+            activeTool.onRelease(new Point2D(e.getX(), e.getY()), e);
+        }
         draggingNodeId = null;
     }
 
     private void onMouseMoved(MouseEvent e) {
         Point2D p = new Point2D(e.getX(), e.getY());
+        if (activeTool != null) {
+            activeTool.onMove(p, e);
+        }
         Integer el = findNearestElementId(p, HIT_TOLERANCE);
         if (el != null) hoverElementId = el; else hoverElementId = null;
         redraw();
@@ -333,10 +269,9 @@ public class BeamCanvasView {
             });
         }
 
-        // draw temp start marker
-        if (tempStartNodeId != null) {
-            g.setFill(Color.GREEN);
-            g.fillOval(tempStartX - NODE_RADIUS, tempStartY - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+        // draw tool overlay last
+        if (activeTool != null) {
+            activeTool.drawOverlay(g);
         }
     }
 
@@ -396,8 +331,36 @@ public class BeamCanvasView {
 
     public Canvas getCanvas() { return canvas; }
 
-    public void setMode(Mode m) { this.mode = m; }
+    public void setMode(Mode m) {
+        this.mode = m;
+        updateActiveTool();
+    }
     public Mode getMode() { return mode; }
+
+    public void setPlacingElementType(ElementType type) {
+        this.activeElementType = type;
+        updateActiveTool();
+    }
+    public ElementType getPlacingElementType() { return activeElementType; }
+
+    private void updateActiveTool() {
+        if (mode == Mode.DRAW) {
+            if (activeElementType == ElementType.TRUSS) {
+                activeTool = new TrussTool();
+            } else if (activeElementType == ElementType.POLYGON) {
+                activeTool = new PolygonTool();
+            } else {
+                activeTool = new BeamTool();
+            }
+        } else if (mode == Mode.PLACE_SUPPORT) {
+            activeTool = new SupportTool();
+        } else if (mode == Mode.PLACE_LOAD) {
+            activeTool = new LoadTool();
+        } else {
+            activeTool = null;
+        }
+        redraw();
+    }
 
     public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
     public void setPlacingBeamMaterialId(int materialId) { this.placingBeamMaterialId = materialId; }
@@ -479,6 +442,139 @@ public class BeamCanvasView {
         } else {
             return new Color(1.0 - v, 1.0 - v, 1.0, 0.8);
         }
+    }
+
+    // --- Tool Implementations ---
+
+    private abstract class BaseElementTool implements CanvasTool {
+        protected Integer startNodeId;
+        protected Point2D startPoint;
+        protected Point2D mousePos;
+
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            if (e.getButton() != MouseButton.PRIMARY) return;
+            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
+            if (startNodeId == null) {
+                if (nearNode >= 0) {
+                    startNodeId = nearNode;
+                    Node n = model.findNodeById(nearNode).get();
+                    startPoint = new Point2D(n.getX(), n.getY());
+                } else {
+                    int nid = model.nextNodeId();
+                    model.addNode(new Node(nid, p.getX(), p.getY()));
+                    startNodeId = nid;
+                    startPoint = p;
+                }
+            } else {
+                int endNodeId;
+                if (nearNode >= 0) {
+                    endNodeId = nearNode;
+                } else {
+                    endNodeId = model.nextNodeId();
+                    model.addNode(new Node(endNodeId, p.getX(), p.getY()));
+                }
+                createElement(startNodeId, endNodeId);
+                startNodeId = null;
+                startPoint = null;
+            }
+            redraw();
+            e.consume();
+        }
+
+        protected abstract void createElement(int s, int e);
+
+        @Override public void onDrag(Point2D p, MouseEvent e) { mousePos = p; redraw(); }
+        @Override public void onMove(Point2D p, MouseEvent e) { mousePos = p; redraw(); }
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+
+        @Override
+        public void drawOverlay(GraphicsContext g) {
+            if (startPoint != null) {
+                g.setFill(Color.GREEN);
+                g.fillOval(startPoint.getX() - NODE_RADIUS, startPoint.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+                if (mousePos != null) {
+                    g.setStroke(Color.GRAY);
+                    g.setLineDashes(5);
+                    g.strokeLine(startPoint.getX(), startPoint.getY(), mousePos.getX(), mousePos.getY());
+                    g.setLineDashes(0);
+                }
+            }
+        }
+    }
+
+    private class BeamTool extends BaseElementTool {
+        @Override
+        protected void createElement(int s, int e) {
+            int eid = model.nextElementId();
+            model.addElement(new BeamElement(eid, s, e, placingBeamMaterialId, 1.0, 1.0));
+        }
+    }
+
+    private class TrussTool extends BaseElementTool {
+        @Override
+        protected void createElement(int s, int e) {
+            int eid = model.nextElementId();
+            model.addElement(new TrussElement(eid, s, e, placingBeamMaterialId, 1.0));
+        }
+    }
+
+    private class PolygonTool extends BaseElementTool {
+        @Override
+        protected void createElement(int s, int e) {
+            int eid = model.nextElementId();
+            model.addElement(new BeamElement(eid, s, e, placingBeamMaterialId, 1.0, 1.0));
+        }
+    }
+
+    private class SupportTool implements CanvasTool {
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            if (e.getButton() != MouseButton.PRIMARY) return;
+            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
+            int nodeId;
+            if (nearNode >= 0) {
+                nodeId = nearNode;
+            } else {
+                nodeId = model.nextNodeId();
+                model.addNode(new Node(nodeId, p.getX(), p.getY()));
+            }
+            int sid = model.nextSupportId();
+            model.addSupport(new Support(sid, nodeId, placingSupportType));
+            redraw();
+            e.consume();
+        }
+        @Override public void onDrag(Point2D p, MouseEvent e) {}
+        @Override public void onMove(Point2D p, MouseEvent e) {}
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+        @Override public void drawOverlay(GraphicsContext g) {}
+    }
+
+    private class LoadTool implements CanvasTool {
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            if (e.getButton() != MouseButton.PRIMARY) return;
+            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
+            int nodeId;
+            if (nearNode >= 0) {
+                nodeId = nearNode;
+            } else {
+                Optional<ElementHit> hit = findNearestElementHit(p, HIT_TOLERANCE);
+                if (hit.isEmpty()) return;
+                nodeId = model.splitElementAtPoint(hit.get().elementId, hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
+            }
+            double rad = Math.toRadians(placingLoadAngleDeg);
+            double fx = placingLoadMagnitude * Math.cos(rad);
+            double fy = -placingLoadMagnitude * Math.sin(rad);
+            int lid = model.nextPointLoadId();
+            model.addPointLoad(new PointLoad(lid, nodeId, fx, fy));
+            redraw();
+            e.consume();
+        }
+        @Override public void onDrag(Point2D p, MouseEvent e) {}
+        @Override public void onMove(Point2D p, MouseEvent e) {}
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+        @Override public void drawOverlay(GraphicsContext g) {}
     }
 }
 
