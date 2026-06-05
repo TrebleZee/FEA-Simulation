@@ -5,12 +5,10 @@ package com.treble.feasimulation.model;
  * and basic cross-section properties.
  */
 public class BeamElement extends Element {
-    private final double area;       // cross-sectional area
     private final double inertia;    // second moment of area (I)
 
     public BeamElement(int id, int nodeStartId, int nodeEndId, int materialId, double area, double inertia) {
-        super(id, new int[]{nodeStartId, nodeEndId}, materialId);
-        this.area = area;
+        super(id, new int[]{nodeStartId, nodeEndId}, materialId, area);
         this.inertia = inertia;
     }
 
@@ -22,8 +20,9 @@ public class BeamElement extends Element {
         return getNodeIds()[1];
     }
 
+    @Override
     public double getArea() {
-        return area;
+        return super.getArea();
     }
 
     public double getInertia() {
@@ -37,6 +36,6 @@ public class BeamElement extends Element {
 
     @Override
     public String toString() {
-        return "BeamElement{" + getId() + ": " + getNodeStartId() + "->" + getNodeEndId() + ", mat=" + getMaterialId() + ", A=" + area + ", I=" + inertia + "}";
+        return "BeamElement{" + getId() + ": " + getNodeStartId() + "->" + getNodeEndId() + ", mat=" + getMaterialId() + ", A=" + getArea() + ", I=" + inertia + "}";
     }
 }

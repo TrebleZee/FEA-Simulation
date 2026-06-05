@@ -7,6 +7,22 @@ import static org.junit.jupiter.api.Assertions.*;
 public class FEADataModelTest {
 
     @Test
+    public void testAxialStiffnessComputation() {
+        // E=200GPa, A=0.01m^2, L=2.0m -> EA/L = (2e11 * 0.01) / 2 = 1e9
+        double E = 200e9;
+        double A = 0.01;
+        double L = 2.0;
+
+        // Using a BeamElement to test the inherited method
+        BeamElement be = new BeamElement(1, 1, 2, 0, A, 1.0e-6);
+        assertEquals(1e9, be.computeAxialStiffness(E, L), 1e-9);
+
+        // Using a TrussElement
+        TrussElement te = new TrussElement(2, 1, 2, 0, A);
+        assertEquals(1e9, te.computeAxialStiffness(E, L), 1e-9);
+    }
+
+    @Test
     public void testNodeCreationAndUpdate() {
         FEAData d = new FEAData();
         Node n = new Node(1, 10.0, 20.0);

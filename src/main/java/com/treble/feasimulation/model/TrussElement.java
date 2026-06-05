@@ -7,11 +7,9 @@ import java.util.Arrays;
  * Trusses only support axial forces (UX, UY) and do not support rotation.
  */
 public class TrussElement extends Element {
-    private final double area;
 
     public TrussElement(int id, int nodeStartId, int nodeEndId, int materialId, double area) {
-        super(id, new int[]{nodeStartId, nodeEndId}, materialId);
-        this.area = area;
+        super(id, new int[]{nodeStartId, nodeEndId}, materialId, area);
     }
 
     public int getNodeStartId() {
@@ -22,8 +20,9 @@ public class TrussElement extends Element {
         return getNodeIds()[1];
     }
 
+    @Override
     public double getArea() {
-        return area;
+        return super.getArea();
     }
 
     @Override
@@ -33,6 +32,6 @@ public class TrussElement extends Element {
 
     @Override
     public String toString() {
-        return "TrussElement{" + getId() + ": " + getNodeStartId() + "->" + getNodeEndId() + ", mat=" + getMaterialId() + ", A=" + area + "}";
+        return "TrussElement{" + getId() + ": " + getNodeStartId() + "->" + getNodeEndId() + ", mat=" + getMaterialId() + ", A=" + getArea() + "}";
     }
 }
