@@ -145,10 +145,24 @@ public class TrussSolver {
         }
 
         DMatrixRMaj xred = new DMatrixRMaj(freeCount, 1);
-        LinearSolverDense<DMatrixRMaj> solver = LinearSolverFactory_DDRM.linear(freeCount);
+        LinearSolverDense<DMatrixRMaj> solver = LinearSolverFactory_DDRM.lu(freeCount);
         if (!solver.setA(Ared)) {
-            throw new RuntimeException("Singular stiffness matrix (structure unstable)");
+            throw new RuntimeException("Singular stiffness matrix (structure unstable or insufficient supports)");
         }
+
+        // Check diagonal elements for zero stiffness (indicates a mechanism)
+        for (int i = 0; i < freeCount; i++) {
+            if (Math.abs(Ared.get(i, i)) < 1e-12) {
+                // Find which node/DOF this corresponds to
+                int globalDof = -1;
+                for (int g = 0; g < ndof; g++) if (freeMap[g] == i) globalDof = g;
+                int ni = globalDof / 2;
+                int node_id = nodes.get(ni).getId();
+                String dofName = (globalDof % 2 == 0) ? "UX" : "UY";
+                throw new RuntimeException(String.format("Unstable structure: node %d has zero stiffness in %s. Check connectivity and supports.", node_id, dofName));
+            }
+        }
+
         solver.solve(bred, xred);
 
         double[] fullU = new double[ndof];

@@ -641,6 +641,23 @@ public class BeamCanvasView {
         }
     }
 
+    private Node createNodeForCurrentContext(int id, double x, double y) {
+        // If we are primarily a truss (or last tool used was truss), create a TrussNode
+        if (activeTool instanceof TrussTool) {
+            return new TrussNode(id, x, y);
+        }
+        // Fallback: check if model is already mostly truss? 
+        // For simplicity, let's just check the active tool or use generic Node.
+        // Support and Load tools should ideally use the type of the structure.
+        boolean hasBeams = model.getElements().stream().anyMatch(e -> e instanceof BeamElement);
+        boolean hasTruss = model.getElements().stream().anyMatch(e -> e instanceof TrussElement);
+        
+        if (hasTruss && !hasBeams) {
+            return new TrussNode(id, x, y);
+        }
+        return new Node(id, x, y);
+    }
+
     private class SupportTool implements CanvasTool {
         @Override
         public void onClick(Point2D p, MouseEvent e) {
@@ -651,7 +668,7 @@ public class BeamCanvasView {
                 nodeId = nearNode;
             } else {
                 nodeId = model.nextNodeId();
-                model.addNode(new Node(nodeId, p.getX(), p.getY()));
+                model.addNode(createNodeForCurrentContext(nodeId, p.getX(), p.getY()));
             }
             int sid = model.nextSupportId();
             model.addSupport(new Support(sid, nodeId, placingSupportType));
@@ -675,8 +692,12 @@ public class BeamCanvasView {
                 nodeId = nearNode;
             } else {
                 Optional<ElementHit> hit = findNearestElementHit(p, HIT_TOLERANCE);
-                if (hit.isEmpty()) return;
-                nodeId = model.splitElementAtPoint(hit.get().elementId, hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
+                if (hit.isEmpty()) {
+                    nodeId = model.nextNodeId();
+                    model.addNode(createNodeForCurrentContext(nodeId, p.getX(), p.getY()));
+                } else {
+                    nodeId = model.splitElementAtPoint(hit.get().elementId, hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
+                }
             }
             int lid = model.nextPointLoadId();
             model.addPointLoad(new PointLoad(lid, nodeId, placingFx, placingFy));

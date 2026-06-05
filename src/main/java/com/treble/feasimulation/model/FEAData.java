@@ -78,7 +78,11 @@ public class FEAData {
         }
 
         int newNodeId = nextNodeId();
-        addNode(new Node(newNodeId, x, y));
+        if (original instanceof TrussElement) {
+            addNode(new TrussNode(newNodeId, x, y));
+        } else {
+            addNode(new Node(newNodeId, x, y));
+        }
 
         removeElementById(elementId);
         if (original instanceof BeamElement be) {
