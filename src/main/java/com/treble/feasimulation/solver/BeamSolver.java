@@ -222,7 +222,9 @@ public class BeamSolver {
             // pivot
             int max = k;
             for (int i = k+1; i < n; i++) if (Math.abs(M[i][k]) > Math.abs(M[max][k])) max = i;
-            if (Math.abs(M[max][k]) < 1e-16) continue; // singular or tiny
+            if (Math.abs(M[max][k]) < 1e-16) {
+                throw new IllegalStateException("Matrix is singular or ill-conditioned (pivot ~ 0)");
+            }
             // swap
             double[] tmp = M[k]; M[k] = M[max]; M[max] = tmp;
 
@@ -239,7 +241,9 @@ public class BeamSolver {
         for (int i = n-1; i >= 0; i--) {
             double s = M[i][n];
             double diag = M[i][i];
-            if (Math.abs(diag) < 1e-16) { x[i] = 0.0; continue; }
+            if (Math.abs(diag) < 1e-16) {
+                throw new IllegalStateException("Matrix is singular or ill-conditioned (diagonal ~ 0) during back substitution");
+            }
             for (int j = i+1; j < n; j++) s -= M[i][j] * x[j];
             x[i] = s / diag;
         }

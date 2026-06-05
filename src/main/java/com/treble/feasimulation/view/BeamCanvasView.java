@@ -73,7 +73,7 @@ public class BeamCanvasView {
                 nodeId = model.nextNodeId();
                 model.addNode(new Node(nodeId, p.getX(), p.getY()));
             }
-            int sid = model.nextElementId(); // reuse element id generator for simplicity for ids; could add dedicated
+            int sid = model.nextSupportId();
             Support s = new Support(sid, nodeId, placingSupportType);
             model.addSupport(s);
             redraw();
@@ -94,7 +94,7 @@ public class BeamCanvasView {
             double rad = Math.toRadians(placingLoadAngleDeg);
             double fx = placingLoadMagnitude * Math.cos(rad);
             double fy = -placingLoadMagnitude * Math.sin(rad);
-            int lid = model.nextElementId();
+            int lid = model.nextPointLoadId();
             PointLoad pl = new PointLoad(lid, nodeId, fx, fy);
             model.addPointLoad(pl);
             redraw();
@@ -151,6 +151,32 @@ public class BeamCanvasView {
                     redraw();
                 });
                 menu.getItems().add(delete);
+            }
+            // also offer delete support or load if clicking near a node
+            int nearNodeForMenu = findNearestNodeId(p, HIT_TOLERANCE);
+            if (nearNodeForMenu >= 0) {
+                // supports attached to this node
+                for (com.treble.feasimulation.model.Support s : model.getSupports()) {
+                    if (s.getNodeId() == nearNodeForMenu) {
+                        MenuItem delS = new MenuItem("Delete Support " + s.getId());
+                        int sidLocal = s.getId();
+                        delS.setOnAction(ae -> { model.removeSupportById(sidLocal); redraw(); });
+                        menu.getItems().add(delS);
+                    }
+                }
+                for (com.treble.feasimulation.model.PointLoad pl : model.getPointLoads()) {
+                    if (pl.getNodeId() == nearNodeForMenu) {
+                        MenuItem delP = new MenuItem("Delete PointLoad " + pl.getId());
+                        int pidLocal = pl.getId();
+                        delP.setOnAction(ae -> { model.removePointLoadById(pidLocal); redraw(); });
+                        menu.getItems().add(delP);
+                    }
+                }
+                // option to delete the node (will cascade remove attached elements/supports/loads)
+                MenuItem delNode = new MenuItem("Delete Node " + nearNodeForMenu);
+                int nidLocal = nearNodeForMenu;
+                delNode.setOnAction(ae -> { model.removeNodeById(nidLocal); redraw(); });
+                menu.getItems().add(delNode);
             }
             MenuItem exit = new MenuItem("Exit");
             exit.setOnAction(ae -> Platform.exit());

@@ -51,6 +51,16 @@ public class MainPresenter implements Presenter {
         // Run simulation
         view.getRunButton().setOnAction(e -> {
             try {
+                // basic validation
+                if (model.getElements().isEmpty()) {
+                    view.getExplanationArea().setText("No elements defined. Draw beams before running the simulation.");
+                    return;
+                }
+                if (model.getSupports().isEmpty()) {
+                    view.getExplanationArea().setText("Warning: No supports defined. The structure is likely unstable and solver may fail.");
+                    // continue to let solver attempt but user is warned
+                }
+
                 BeamSolver solver = new BeamSolver();
                 BeamSolver.Result r = solver.solve(model);
                 // choose a visual scale (pixels per meter). Provide a simple heuristic
@@ -61,8 +71,13 @@ public class MainPresenter implements Presenter {
                 ResultExplanationService expl = new ResultExplanationService();
                 String explanation = expl.explain(r, model);
                 view.getExplanationArea().setText(explanation);
+            } catch (IllegalStateException ise) {
+                // solver-level numerical issues
+                String msg = "Simulation failed: numerical issue - " + ise.getMessage();
+                view.getExplanationArea().setText(msg);
             } catch (Exception ex) {
                 ex.printStackTrace();
+                view.getExplanationArea().setText("Simulation failed: " + ex.getMessage());
             }
         });
     }

@@ -30,6 +30,30 @@ public class FEAData {
     public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
     public List<PointLoad> getPointLoads() { return Collections.unmodifiableList(pointLoads); }
 
+    // Dedicated id generators for clarity
+    public int nextSupportId() { return supports.stream().mapToInt(Support::getId).max().orElse(0) + 1; }
+    public int nextPointLoadId() { return pointLoads.stream().mapToInt(PointLoad::getId).max().orElse(0) + 1; }
+
+    // Removal helpers with cascade cleanup
+    public boolean removeSupportById(int id) { return supports.removeIf(s -> s.getId() == id); }
+    public boolean removePointLoadById(int id) { return pointLoads.removeIf(p -> p.getId() == id); }
+
+    public boolean removeElementById(int id) {
+        return elements.removeIf(e -> e.getId() == id);
+    }
+
+    public boolean removeNodeById(int id) {
+        boolean removed = nodes.removeIf(n -> n.getId() == id);
+        if (removed) {
+            // remove elements referencing the node
+            elements.removeIf(e -> (e.getNodeStartId() == id) || (e.getNodeEndId() == id));
+            // remove supports and point loads attached to the node
+            supports.removeIf(s -> s.getNodeId() == id);
+            pointLoads.removeIf(p -> p.getNodeId() == id);
+        }
+        return removed;
+    }
+
     // Lookup helpers
     public Optional<Node> findNodeById(int id) {
         return nodes.stream().filter(n -> n.getId() == id).findFirst();
