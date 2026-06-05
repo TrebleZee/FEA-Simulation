@@ -65,8 +65,8 @@ public class BeamCanvasView {
     private CanvasTool activeTool;
     private Support.Type placingSupportType = Support.Type.FIXED;
     private int placingBeamMaterialId = MaterialLibrary.getDefaultMaterial().getId();
-    private double placingLoadMagnitude = 0.0;
-    private double placingLoadAngleDeg = 270.0;
+    private double placingFx = 0.0;
+    private double placingFy = -1000.0;
 
     private Integer draggingNodeId = null;
 
@@ -75,6 +75,12 @@ public class BeamCanvasView {
     // result storage
     private com.treble.feasimulation.solver.BeamSolver.Result lastResult = null;
     private double lastScale = 1.0;
+    private Runnable onModelUpdate;
+    public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
+
+    private void notifyModelUpdate() {
+        if (onModelUpdate != null) onModelUpdate.run();
+    }
 
     private static final double NODE_RADIUS = 5.0;
     private static final double HIT_TOLERANCE = 8.0;
@@ -181,6 +187,7 @@ public class BeamCanvasView {
             model.findNodeById(draggingNodeId).ifPresent(oldNode -> {
                 model.updateNode(oldNode.copyAt(e.getX(), e.getY()));
             });
+            notifyModelUpdate();
             redraw();
             e.consume();
             return;
@@ -210,7 +217,7 @@ public class BeamCanvasView {
         gc.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
     }
 
-    private void redraw() {
+    public void redraw() {
         clear();
         GraphicsContext g = canvas.getGraphicsContext2D();
         // draw elements (undeformed black)
@@ -376,7 +383,7 @@ public class BeamCanvasView {
 
     public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
     public void setPlacingBeamMaterialId(int materialId) { this.placingBeamMaterialId = materialId; }
-    public void setPlacingLoad(double magnitude, double angleDeg) { this.placingLoadMagnitude = magnitude; this.placingLoadAngleDeg = angleDeg; }
+    public void setPlacingLoad(double fx, double fy) { this.placingFx = fx; this.placingFy = fy; }
 
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
         this.lastResult = r;
@@ -521,6 +528,7 @@ public class BeamCanvasView {
                 createElement(startNodeId, endNodeId);
                 startNodeId = null;
                 startPoint = null;
+                notifyModelUpdate();
             }
             redraw();
             e.consume();
@@ -590,6 +598,7 @@ public class BeamCanvasView {
             }
             int sid = model.nextSupportId();
             model.addSupport(new Support(sid, nodeId, placingSupportType));
+            notifyModelUpdate();
             redraw();
             e.consume();
         }
@@ -612,11 +621,9 @@ public class BeamCanvasView {
                 if (hit.isEmpty()) return;
                 nodeId = model.splitElementAtPoint(hit.get().elementId, hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
             }
-            double rad = Math.toRadians(placingLoadAngleDeg);
-            double fx = placingLoadMagnitude * Math.cos(rad);
-            double fy = -placingLoadMagnitude * Math.sin(rad);
             int lid = model.nextPointLoadId();
-            model.addPointLoad(new PointLoad(lid, nodeId, fx, fy));
+            model.addPointLoad(new PointLoad(lid, nodeId, placingFx, placingFy));
+            notifyModelUpdate();
             redraw();
             e.consume();
         }

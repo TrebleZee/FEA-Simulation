@@ -10,6 +10,11 @@ import com.treble.feasimulation.solver.BeamSolver;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.collections.FXCollections;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import com.treble.feasimulation.model.PointLoad;
+import com.treble.feasimulation.model.Support;
 
 public class MainPresenter implements Presenter {
     private final FEAData model;
@@ -42,6 +47,7 @@ public class MainPresenter implements Presenter {
             canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.DRAW);
             view.clearStressSummary();
             view.getExplanationArea().clear();
+            refreshTables();
         });
 
         // Element drawing
@@ -77,17 +83,101 @@ public class MainPresenter implements Presenter {
         // Point load placement
         view.getApplyLoadButton().setOnAction(e -> {
             try {
-                double mag = Double.parseDouble(view.getLoadMagnitudeField().getText());
-                double ang = Double.parseDouble(view.getLoadAngleField().getText());
-                canvasView.setPlacingLoad(mag, ang);
+                double fx = Double.parseDouble(view.getLoadFxField().getText());
+                double fy = Double.parseDouble(view.getLoadFyField().getText());
+                canvasView.setPlacingLoad(fx, fy);
                 canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.PLACE_LOAD);
             } catch (NumberFormatException ex) {
                 // ignore invalid input
             }
         });
 
+        view.getUpdateLoadButton().setOnAction(e -> {
+            PointLoad selected = view.getPointLoadTable().getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                try {
+                    double fx = Double.parseDouble(view.getLoadFxField().getText());
+                    double fy = Double.parseDouble(view.getLoadFyField().getText());
+                    model.removePointLoadById(selected.getId());
+                    model.addPointLoad(new PointLoad(selected.getId(), selected.getNodeId(), fx, fy));
+                    refreshTables();
+                    canvasView.redraw();
+                } catch (NumberFormatException ex) {
+                    // ignore
+                }
+            }
+        });
+
+        canvasView.setOnModelUpdate(this::refreshTables);
+        view.getLoadFxField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
+        view.getLoadFyField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
+
+        setupTables();
+        refreshTables();
+
         // Run simulation
         view.getRunButton().setOnAction(e -> runSimulation());
+    }
+
+    private void updatePlacingLoad() {
+        try {
+            double fx = Double.parseDouble(view.getLoadFxField().getText());
+            double fy = Double.parseDouble(view.getLoadFyField().getText());
+            canvasView.setPlacingLoad(fx, fy);
+        } catch (NumberFormatException ex) {
+            // ignore
+        }
+    }
+
+    private void setupTables() {
+        // Point Load table context menu
+        ContextMenu plMenu = new ContextMenu();
+        MenuItem deletePl = new MenuItem("Delete Load");
+        deletePl.setOnAction(e -> {
+            PointLoad selected = view.getPointLoadTable().getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                model.removePointLoadById(selected.getId());
+                refreshTables();
+                canvasView.redraw();
+            }
+        });
+        plMenu.getItems().add(deletePl);
+        view.getPointLoadTable().setContextMenu(plMenu);
+
+        // Selection listener to "edit"
+        view.getPointLoadTable().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                view.getLoadFxField().setText(String.valueOf(newVal.getFx()));
+                view.getLoadFyField().setText(String.valueOf(newVal.getFy()));
+            }
+        });
+
+        // Support table context menu
+        ContextMenu sMenu = new ContextMenu();
+        
+        // Selection listener for supports
+        view.getSupportTable().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && newVal.getType() != null) {
+                view.getSupportTypeChoice().setValue(newVal.getType().name());
+            }
+        });
+
+        MenuItem deleteS = new MenuItem("Delete Support");
+        deleteS.setOnAction(e -> {
+            Support selected = view.getSupportTable().getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                model.removeSupportById(selected.getId());
+                refreshTables();
+                canvasView.redraw();
+            }
+        });
+        sMenu.getItems().add(deleteS);
+        view.getSupportTable().setContextMenu(sMenu);
+    }
+
+    private void refreshTables() {
+        view.getPointLoadTable().setItems(FXCollections.observableArrayList(model.getPointLoads()));
+        view.getSupportTable().setItems(FXCollections.observableArrayList(model.getSupports()));
     }
 
     /**
