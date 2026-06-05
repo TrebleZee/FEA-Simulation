@@ -8,7 +8,7 @@ import com.treble.feasimulation.model.PointLoad;
 import com.treble.feasimulation.model.Support;
 
 import org.ejml.data.DMatrixRMaj;
-import org.ejml.dense.row.linsol.LinearSolverDense;
+import org.ejml.interfaces.linsol.LinearSolverDense;
 import org.ejml.dense.row.linsol.LinearSolverFactory_DDRM;
 
 import java.util.ArrayList;
