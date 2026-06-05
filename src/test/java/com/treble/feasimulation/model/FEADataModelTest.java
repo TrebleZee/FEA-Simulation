@@ -123,4 +123,21 @@ public class FEADataModelTest {
         Node.DOF[] activeDofs = tm.getActiveDOFs();
         assertEquals(2, activeDofs.length);
     }
+
+    @Test
+    public void testNodeCopyAtPreservesType() {
+        Node n = new Node(1, 10, 20);
+        Node n2 = n.copyAt(15, 25);
+        assertEquals(1, n2.getId());
+        assertEquals(15.0, n2.getX(), 1e-9);
+        assertEquals(25.0, n2.getY(), 1e-9);
+        assertFalse(n2 instanceof TrussNode);
+
+        TrussNode tn = new TrussNode(2, 10, 20);
+        Node tn2 = tn.copyAt(15, 25);
+        assertEquals(2, tn2.getId());
+        assertEquals(15.0, tn2.getX(), 1e-9);
+        assertEquals(25.0, tn2.getY(), 1e-9);
+        assertTrue(tn2 instanceof TrussNode);
+    }
 }

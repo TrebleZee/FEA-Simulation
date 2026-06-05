@@ -177,11 +177,13 @@ public class BeamCanvasView {
             activeTool.onDrag(p, e);
         }
         if (draggingNodeId != null) {
-            // Update node position
-            Node updated = new Node(draggingNodeId, e.getX(), e.getY());
-            model.updateNode(updated);
+            // Update node position while preserving its type
+            model.findNodeById(draggingNodeId).ifPresent(oldNode -> {
+                model.updateNode(oldNode.copyAt(e.getX(), e.getY()));
+            });
             redraw();
             e.consume();
+            return;
         }
     }
 

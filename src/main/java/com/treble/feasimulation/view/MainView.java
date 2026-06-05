@@ -29,6 +29,7 @@ public class MainView {
     private final ChoiceBox<String> supportTypeChoice;
     private final ChoiceBox<Material> beamMaterialChoice;
     private final Button drawElementButton;
+    private final Button trussModeButton;
     private final Button placeSupportButton;
     private final TextField loadMagnitudeField;
     private final TextField loadAngleField;
@@ -63,6 +64,7 @@ public class MainView {
         elementTypeChoice.getItems().addAll("Beam", "Truss Member", "Polygon");
         elementTypeChoice.setValue("Beam");
         drawElementButton = new Button("Draw Elements");
+        trussModeButton = new Button("Truss Mode");
 
         supportTypeChoice = new ChoiceBox<>();
         supportTypeChoice.getItems().addAll("FIXED", "PINNED", "ROLLER");
@@ -89,7 +91,7 @@ public class MainView {
         explanationArea.setPromptText("Result explanation will appear here.");
 
         VBox side = new VBox(8,
-                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton,
+                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, trussModeButton,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Beam Material:"), beamMaterialChoice,
                 new Label("Point Load magnitude:"), loadMagnitudeField,
@@ -119,6 +121,7 @@ public class MainView {
     // Side panel getters
     public ChoiceBox<String> getElementTypeChoice() { return elementTypeChoice; }
     public Button getDrawElementButton() { return drawElementButton; }
+    public Button getTrussModeButton() { return trussModeButton; }
     public ChoiceBox<String> getSupportTypeChoice() { return supportTypeChoice; }
     public ChoiceBox<Material> getBeamMaterialChoice() { return beamMaterialChoice; }
     public Button getPlaceSupportButton() { return placeSupportButton; }

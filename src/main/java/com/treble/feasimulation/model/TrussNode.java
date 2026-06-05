@@ -16,6 +16,11 @@ public class TrussNode extends Node {
     }
 
     @Override
+    public Node copyAt(double x, double y) {
+        return new TrussNode(getId(), x, y);
+    }
+
+    @Override
     public String toString() {
         return "TrussNode{" + getId() + ": (" + getX() + "," + getY() + ")}";
     }

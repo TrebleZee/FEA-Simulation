@@ -57,6 +57,11 @@ public class MainPresenter implements Presenter {
             }
         });
 
+        view.getTrussModeButton().setOnAction(e -> {
+            canvasView.setMode(BeamCanvasView.Mode.DRAW);
+            canvasView.setPlacingElementType(BeamCanvasView.ElementType.TRUSS);
+        });
+
         // Support placement
         view.getPlaceSupportButton().setOnAction(e -> {
             String sel = view.getSupportTypeChoice().getValue();
