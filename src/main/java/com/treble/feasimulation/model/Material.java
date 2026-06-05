@@ -5,12 +5,18 @@ public class Material {
     private final String name;
     private final double youngsModulus;
     private final double density;
+    private final double yieldStress;
 
     public Material(int id, String name, double youngsModulus, double density) {
+        this(id, name, youngsModulus, density, Double.NaN);
+    }
+
+    public Material(int id, String name, double youngsModulus, double density, double yieldStress) {
         this.id = id;
         this.name = name;
         this.youngsModulus = youngsModulus;
         this.density = density;
+        this.yieldStress = yieldStress;
     }
 
     public int getId() {
@@ -29,8 +35,15 @@ public class Material {
         return density;
     }
 
+    public double getYieldStress() {
+        return yieldStress;
+    }
+
     @Override
     public String toString() {
+        if (Double.isFinite(yieldStress) && yieldStress > 0.0) {
+            return "Material{" + id + ": " + name + ", yield=" + yieldStress + "}";
+        }
         return "Material{" + id + ": " + name + "}";
     }
 }
