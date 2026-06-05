@@ -10,6 +10,7 @@ import com.treble.feasimulation.model.Support;
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.interfaces.linsol.LinearSolverDense;
 import org.ejml.dense.row.factory.LinearSolverFactory_DDRM;
+import org.ejml.dense.row.CommonOps_DDRM;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -184,6 +185,22 @@ public class BeamSolver {
             solver.solve(bred, xred);
         } catch (Exception ex) {
             throw new IllegalStateException("Linear solver failed: " + ex.getMessage(), ex);
+        }
+
+        // verify residual to detect singular/ill-conditioned cases
+        DMatrixRMaj resid = new DMatrixRMaj(freeCount, 1);
+        CommonOps_DDRM.mult(Ared, xred, resid);
+        // resid = resid - bred
+        for (int i = 0; i < freeCount; i++) resid.set(i, 0, resid.get(i,0) - bred.get(i,0));
+        double maxRes = 0.0; double maxB = 0.0;
+        for (int i = 0; i < freeCount; i++) {
+            double rv = Math.abs(resid.get(i,0)); if (rv > maxRes) maxRes = rv;
+            double bv = Math.abs(bred.get(i,0)); if (bv > maxB) maxB = bv;
+            double xv = xred.get(i,0); if (Double.isNaN(xv) || Double.isInfinite(xv)) throw new IllegalStateException("Linear solver produced invalid values (NaN/Inf)");
+        }
+        double tol = 1e-6 * Math.max(1.0, maxB);
+        if (maxRes > tol) {
+            throw new IllegalStateException("Linear system residual too large (matrix may be singular or ill-conditioned). maxRes=" + maxRes + " tol=" + tol);
         }
 
         // expand solution
