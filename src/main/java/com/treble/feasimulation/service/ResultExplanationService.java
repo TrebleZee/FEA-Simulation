@@ -60,22 +60,23 @@ public class ResultExplanationService {
             }
         }
 
-        // estimate a simple relative bending stress: sigma ~ M * c / I
-        double estimatedStress = Double.NaN;
         String stressNote = "";
-        if (worstElem != null) {
+        if (worstEr.bendingStress != null && !Double.isNaN(worstEr.bendingStress.maxTensileStress)) {
+            BeamSolver.BendingStressResult stress = worstEr.bendingStress;
+            stressNote = String.format(
+                    "Estimated outer-fiber distance y ≈ %.3e. Max tensile stress ≈ %.3e and max compressive stress ≈ %.3e.",
+                    stress.extremeFiberDistance, stress.maxTensileStress, stress.maxCompressiveStress);
+        } else if (worstElem != null) {
             double I = worstElem.getInertia();
             double A = worstElem.getArea();
-            double c = 1.0;
-            if (A > 0) {
-                // coarse estimate of section half-depth from area (assumes roughly square section)
-                c = Math.sqrt(A) / 2.0;
-            }
-            if (I > 0) {
-                estimatedStress = Math.abs(maxAbsM) * c / I; // units consistent with M and I
-                stressNote = String.format("Estimated bending stress (relative) ≈ %.3f (M·c/I, units depend on input).", estimatedStress);
+            if (I > 0 && A > 0) {
+                double c = Math.sqrt(3.0 * I / A);
+                double estimatedStress = Math.abs(maxAbsM) * c / I;
+                stressNote = String.format(
+                        "Estimated bending stress ≈ %.3e using a rectangular-equivalent section depth.",
+                        estimatedStress);
             } else {
-                stressNote = "Section inertia I is zero or unknown, cannot estimate stress numerically.";
+                stressNote = "Section properties are incomplete, so bending stress could not be estimated.";
             }
         }
 
@@ -91,13 +92,10 @@ public class ResultExplanationService {
         }
 
         // likely failure explanation
-        String failureReason = "";
-        if (!Double.isNaN(estimatedStress)) {
-            failureReason = "If the estimated bending stress exceeds the material yield or allowable stress, " +
-                    "plastic yielding or fracture will occur at this location. High bending moment produces tensile and compressive stresses through the section depth; " +
-                    "the extreme fiber (furthest from neutral axis) experiences the highest tensile stress, which typically controls failure.";
-        } else {
-            failureReason = "High bending moment at this location indicates a risk of failure; check section modulus (I/c) and material strength to quantify risk.";
+        String failureReason = "High bending moment at this location indicates a risk of failure; check section modulus (I/c) and material strength to quantify risk.";
+        if (worstEr.bendingStress != null && !Double.isNaN(worstEr.bendingStress.maxTensileStress)) {
+            failureReason = "If the estimated tensile or compressive bending stress exceeds the material yield or allowable stress, " +
+                    "plastic yielding or fracture can occur at this location. The extreme fiber experiences the largest stress.";
         }
 
         String summary = String.format("Maximum absolute bending moment: %.3e. The most critical location is %s. %s %s%s",

@@ -21,6 +21,28 @@ import com.treble.feasimulation.model.PointLoad;
 public class BeamCanvasView {
     public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, NONE }
 
+    private static class SegmentProjection {
+        final Point2D point;
+        final double distance;
+
+        SegmentProjection(Point2D point, double distance) {
+            this.point = point;
+            this.distance = distance;
+        }
+    }
+
+    private static class ElementHit {
+        final int elementId;
+        final Point2D projectedPoint;
+        final double distance;
+
+        ElementHit(int elementId, Point2D projectedPoint, double distance) {
+            this.elementId = elementId;
+            this.projectedPoint = projectedPoint;
+            this.distance = distance;
+        }
+    }
+
     private final Canvas canvas;
     private final FEAData model;
 
@@ -87,8 +109,12 @@ public class BeamCanvasView {
             if (nearNode >= 0) {
                 nodeId = nearNode;
             } else {
-                nodeId = model.nextNodeId();
-                model.addNode(new Node(nodeId, p.getX(), p.getY()));
+                java.util.Optional<ElementHit> hit = findNearestElementHit(p, HIT_TOLERANCE);
+                if (hit.isEmpty()) {
+                    return;
+                }
+                nodeId = model.splitElementAtPoint(hit.get().elementId,
+                        hit.get().projectedPoint.getX(), hit.get().projectedPoint.getY());
             }
             // convert magnitude & angle to fx, fy (y screen grows downwards so invert sin)
             double rad = Math.toRadians(placingLoadAngleDeg);
@@ -323,33 +349,45 @@ public class BeamCanvasView {
     }
 
     private Integer findNearestElementId(Point2D p, double tol) {
+        java.util.Optional<ElementHit> hit = findNearestElementHit(p, tol);
+        return hit.map(elementHit -> elementHit.elementId).orElse(null);
+    }
+
+    private java.util.Optional<ElementHit> findNearestElementHit(Point2D p, double tol) {
         Integer best = null;
         double bestDist = Double.MAX_VALUE;
+        Point2D bestProjection = null;
         for (BeamElement be : model.getElements()) {
             Optional<Node> s = model.findNodeById(be.getNodeStartId());
             Optional<Node> t = model.findNodeById(be.getNodeEndId());
             if (s.isPresent() && t.isPresent()) {
                 Point2D a = new Point2D(s.get().getX(), s.get().getY());
                 Point2D b = new Point2D(t.get().getX(), t.get().getY());
-                double dist = pointToSegmentDistance(p, a, b);
+                SegmentProjection projection = projectPointOntoSegment(p, a, b);
+                double dist = projection.distance;
                 if (dist < bestDist && dist <= tol) {
-                    bestDist = dist; best = be.getId();
+                    bestDist = dist;
+                    best = be.getId();
+                    bestProjection = projection.point;
                 }
             }
         }
-        return best;
+        if (best == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(new ElementHit(best, bestProjection, bestDist));
     }
 
-    private double pointToSegmentDistance(Point2D p, Point2D a, Point2D b) {
-        // projection
+    private SegmentProjection projectPointOntoSegment(Point2D p, Point2D a, Point2D b) {
         double dx = b.getX() - a.getX();
         double dy = b.getY() - a.getY();
-        if (dx == 0 && dy == 0) return p.distance(a);
+        if (dx == 0 && dy == 0) return new SegmentProjection(a, p.distance(a));
         double t = ((p.getX() - a.getX()) * dx + (p.getY() - a.getY()) * dy) / (dx*dx + dy*dy);
         t = Math.max(0, Math.min(1, t));
         double px = a.getX() + t * dx;
         double py = a.getY() + t * dy;
-        return p.distance(px, py);
+        Point2D projected = new Point2D(px, py);
+        return new SegmentProjection(projected, p.distance(projected));
     }
 
     public Canvas getCanvas() { return canvas; }

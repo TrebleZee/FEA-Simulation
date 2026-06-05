@@ -20,6 +20,22 @@ public class BeamSolverAdditionalTest {
     }
 
     @Test
+    public void testBendingStressHelperUsesExtremeFiberEstimate() {
+        BeamSolver solver = new BeamSolver();
+        BeamElement beam = new BeamElement(1, 1, 2, 0, 1.0, 1.0e-6);
+
+        BeamSolver.BendingStressResult stress = solver.computeBendingStress(beam, 2000.0, -500.0);
+
+        double expectedY = Math.sqrt(3.0 * 1.0e-6 / 1.0);
+        double expectedStress = 2000.0 * expectedY / 1.0e-6;
+
+        assertEquals(expectedY, stress.extremeFiberDistance, expectedY * 1e-9);
+        assertEquals(2000.0, stress.maxBendingMoment, 1e-9);
+        assertEquals(expectedStress, stress.maxTensileStress, expectedStress * 1e-9);
+        assertEquals(-expectedStress, stress.maxCompressiveStress, expectedStress * 1e-9);
+    }
+
+    @Test
     public void testStressSigmaCalculationAtFixedEnd() {
         FEAData data = new FEAData();
         double L = 2.0;
@@ -41,9 +57,18 @@ public class BeamSolverAdditionalTest {
         BeamSolver.ElementResult er = null;
         for (BeamSolver.ElementResult x : r.elementResults) if (x.elementId == 1) { er = x; break; }
         assertNotNull(er);
+        assertNotNull(er.bendingStress);
+
         double Mfixed = Math.abs(er.endMomentStart);
         double expectedM = P * L; // cantilever fixed end moment
         assertEquals(expectedM, Mfixed, Math.max(1e-6, Math.abs(expectedM) * 0.05));
+
+        double expectedY = Math.sqrt(3.0 * I / 1.0);
+        double expectedStress = expectedM * expectedY / I;
+        assertEquals(expectedY, er.bendingStress.extremeFiberDistance, expectedY * 1e-9);
+        assertEquals(expectedM, er.bendingStress.maxBendingMoment, expectedM * 1e-9);
+        assertEquals(expectedStress, er.bendingStress.maxTensileStress, expectedStress * 0.05);
+        assertEquals(-expectedStress, er.bendingStress.maxCompressiveStress, expectedStress * 0.05);
 
         // compute sigma at extreme fiber y (assume rectangular section with depth 0.1 -> y=0.05)
         double y = 0.05;

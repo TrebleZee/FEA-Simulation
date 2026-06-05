@@ -22,6 +22,8 @@ public class MainPresenter implements Presenter {
         view.getClearItem().setOnAction(e -> {
             canvasView.clear();
             canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.DRAW);
+            view.clearStressSummary();
+            view.getExplanationArea().clear();
         });
 
         // Support placement
@@ -53,6 +55,7 @@ public class MainPresenter implements Presenter {
             try {
                 // basic validation
                 if (model.getElements().isEmpty()) {
+                    view.clearStressSummary();
                     view.getExplanationArea().setText("No elements defined. Draw beams before running the simulation.");
                     return;
                 }
@@ -66,6 +69,7 @@ public class MainPresenter implements Presenter {
                 // choose a visual scale (pixels per meter). Provide a simple heuristic
                 double scale = 100.0; // user-adjustable later
                 canvasView.showResult(r, scale);
+                updateStressSummary(r);
 
                 // generate plain-English explanation and show in side panel
                 ResultExplanationService expl = new ResultExplanationService();
@@ -73,10 +77,12 @@ public class MainPresenter implements Presenter {
                 view.getExplanationArea().setText(explanation);
             } catch (IllegalStateException ise) {
                 // solver-level numerical issues
+                view.clearStressSummary();
                 String msg = "Simulation failed: numerical issue - " + ise.getMessage();
                 view.getExplanationArea().setText(msg);
             } catch (Exception ex) {
                 ex.printStackTrace();
+                view.clearStressSummary();
                 view.getExplanationArea().setText("Simulation failed: " + ex.getMessage());
             }
         });
@@ -85,5 +91,44 @@ public class MainPresenter implements Presenter {
     @Override
     public void start() {
         // placeholder: load model, initialize state
+    }
+
+    private void updateStressSummary(BeamSolver.Result result) {
+        BeamSolver.ElementResult maxTensileElement = null;
+        BeamSolver.ElementResult maxCompressiveElement = null;
+        double maxTensile = Double.NEGATIVE_INFINITY;
+        double maxCompressive = Double.POSITIVE_INFINITY;
+
+        for (BeamSolver.ElementResult er : result.elementResults) {
+            if (er == null || er.bendingStress == null) {
+                continue;
+            }
+
+            double tensile = er.bendingStress.maxTensileStress;
+            if (!Double.isNaN(tensile) && tensile > maxTensile) {
+                maxTensile = tensile;
+                maxTensileElement = er;
+            }
+
+            double compressive = er.bendingStress.maxCompressiveStress;
+            if (!Double.isNaN(compressive) && compressive < maxCompressive) {
+                maxCompressive = compressive;
+                maxCompressiveElement = er;
+            }
+        }
+
+        if (maxTensileElement != null) {
+            view.getMaxTensileStressLabel().setText(String.format("%.3e Pa (element %d)",
+                    maxTensile, maxTensileElement.elementId));
+        } else {
+            view.getMaxTensileStressLabel().setText("N/A");
+        }
+
+        if (maxCompressiveElement != null) {
+            view.getMaxCompressiveStressLabel().setText(String.format("%.3e Pa (element %d)",
+                    maxCompressive, maxCompressiveElement.elementId));
+        } else {
+            view.getMaxCompressiveStressLabel().setText("N/A");
+        }
     }
 }

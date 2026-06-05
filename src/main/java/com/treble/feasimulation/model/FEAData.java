@@ -5,9 +5,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Central model container for FEA data. For Phase 1 we store BeamElement instances in the elements list.
+ */
 public class FEAData {
     private final List<Node> nodes = new ArrayList<>();
-    private final List<Element> elements = new ArrayList<>();
+    private final List<BeamElement> elements = new ArrayList<>();
     private final List<Material> materials = new ArrayList<>();
     private final List<Load> loads = new ArrayList<>();
 
@@ -16,7 +19,7 @@ public class FEAData {
     private final List<PointLoad> pointLoads = new ArrayList<>();
 
     public void addNode(Node n) { nodes.add(n); }
-    public void addElement(Element e) { elements.add(e); }
+    public void addElement(BeamElement e) { elements.add(e); }
     public void addMaterial(Material m) { materials.add(m); }
     public void addLoad(Load l) { loads.add(l); }
 
@@ -24,7 +27,7 @@ public class FEAData {
     public void addPointLoad(PointLoad p) { pointLoads.add(p); }
 
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
-    public List<Element> getElements() { return Collections.unmodifiableList(elements); }
+    public List<BeamElement> getElements() { return Collections.unmodifiableList(elements); }
     public List<Material> getMaterials() { return Collections.unmodifiableList(materials); }
     public List<Load> getLoads() { return Collections.unmodifiableList(loads); }
     public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
@@ -40,6 +43,42 @@ public class FEAData {
 
     public boolean removeElementById(int id) {
         return elements.removeIf(e -> e.getId() == id);
+    }
+
+    /**
+     * Split an existing beam element by inserting a node at the supplied coordinates.
+     * The original element is replaced by two shorter elements that reuse its properties.
+     *
+     * @return the inserted node id, or an existing endpoint node id if the point lies
+     *         exactly on one of the element's ends.
+     */
+    public int splitElementAtPoint(int elementId, double x, double y) {
+        BeamElement original = findElementById(elementId)
+                .orElseThrow(() -> new IllegalArgumentException("Element not found: " + elementId));
+
+        Node start = findNodeById(original.getNodeStartId())
+                .orElseThrow(() -> new IllegalStateException("Start node not found for element " + elementId));
+        Node end = findNodeById(original.getNodeEndId())
+                .orElseThrow(() -> new IllegalStateException("End node not found for element " + elementId));
+
+        double endpointTolerance = 1e-6;
+        if (Math.hypot(x - start.getX(), y - start.getY()) <= endpointTolerance) {
+            return start.getId();
+        }
+        if (Math.hypot(x - end.getX(), y - end.getY()) <= endpointTolerance) {
+            return end.getId();
+        }
+
+        int newNodeId = nextNodeId();
+        addNode(new Node(newNodeId, x, y));
+
+        removeElementById(elementId);
+        addElement(new BeamElement(nextElementId(), start.getId(), newNodeId,
+                original.getMaterialId(), original.getArea(), original.getInertia()));
+        addElement(new BeamElement(nextElementId(), newNodeId, end.getId(),
+                original.getMaterialId(), original.getArea(), original.getInertia()));
+
+        return newNodeId;
     }
 
     public boolean removeNodeById(int id) {
@@ -59,17 +98,8 @@ public class FEAData {
         return nodes.stream().filter(n -> n.getId() == id).findFirst();
     }
 
-    public Optional<Element> findElementById(int id) {
+    public Optional<BeamElement> findElementById(int id) {
         return elements.stream().filter(e -> e.getId() == id).findFirst();
-    }
-
-    // Remove/replace helpers
-    public boolean removeElementById(int id) {
-        return elements.removeIf(e -> e.getId() == id);
-    }
-
-    public boolean removeNodeById(int id) {
-        return nodes.removeIf(n -> n.getId() == id);
     }
 
     public boolean updateNode(Node updated) {
@@ -88,6 +118,7 @@ public class FEAData {
     }
 
     public int nextElementId() {
-        return elements.stream().mapToInt(Element::getId).max().orElse(0) + 1;
+        return elements.stream().mapToInt(BeamElement::getId).max().orElse(0) + 1;
     }
 }
+

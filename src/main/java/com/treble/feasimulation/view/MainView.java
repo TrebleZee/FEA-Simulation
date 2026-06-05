@@ -28,6 +28,8 @@ public class MainView {
     private final TextField loadAngleField;
     private final Button applyLoadButton;
     private final Button runButton;
+    private final Label maxTensileStressLabel;
+    private final Label maxCompressiveStressLabel;
     private final TextArea explanationArea;
 
     public MainView(double width, double height) {
@@ -58,9 +60,12 @@ public class MainView {
 
         loadMagnitudeField = new TextField("1000");
         loadAngleField = new TextField("270"); // degrees, 270 = downward
-        applyLoadButton = new Button("Apply Point Load (click node)");
+        applyLoadButton = new Button("Apply Point Load (click beam or node)");
 
         Button runButton = new Button("Run Simulation");
+
+        Label maxTensileStressLabel = new Label("N/A");
+        Label maxCompressiveStressLabel = new Label("N/A");
 
         TextArea explanationArea = new TextArea();
         explanationArea.setEditable(false);
@@ -71,14 +76,20 @@ public class MainView {
         VBox side = new VBox(8,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Point Load magnitude:"), loadMagnitudeField,
-                new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField, applyLoadButton,
-                new Label(""), runButton, new Label("Analysis Explanation:"), explanationArea);
+                new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField,
+                new Label("Click a beam or node to place the load."), applyLoadButton,
+                new Label(""), runButton,
+                new Label("Max Tensile Stress:"), maxTensileStressLabel,
+                new Label("Max Compressive Stress:"), maxCompressiveStressLabel,
+                new Label("Analysis Explanation:"), explanationArea);
         side.setPadding(new Insets(8));
         side.setPrefWidth(320);
         root.setRight(side);
 
         // expose run button and explanation area
         this.runButton = runButton;
+        this.maxTensileStressLabel = maxTensileStressLabel;
+        this.maxCompressiveStressLabel = maxCompressiveStressLabel;
         this.explanationArea = explanationArea;
     }
 
@@ -95,5 +106,12 @@ public class MainView {
     public TextField getLoadAngleField() { return loadAngleField; }
     public Button getApplyLoadButton() { return applyLoadButton; }
     public Button getRunButton() { return runButton; }
+    public Label getMaxTensileStressLabel() { return maxTensileStressLabel; }
+    public Label getMaxCompressiveStressLabel() { return maxCompressiveStressLabel; }
     public TextArea getExplanationArea() { return explanationArea; }
+
+    public void clearStressSummary() {
+        maxTensileStressLabel.setText("N/A");
+        maxCompressiveStressLabel.setText("N/A");
+    }
 }

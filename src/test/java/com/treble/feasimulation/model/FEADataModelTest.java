@@ -34,6 +34,31 @@ public class FEADataModelTest {
     }
 
     @Test
+    public void testSplitElementAtPointCreatesTwoElements() {
+        FEAData d = new FEAData();
+        d.addNode(new Node(1, 0.0, 0.0));
+        d.addNode(new Node(2, 10.0, 0.0));
+        d.addElement(new BeamElement(1, 1, 2, 7, 2.5, 4.5));
+
+        int newNodeId = d.splitElementAtPoint(1, 4.0, 0.0);
+
+        assertEquals(3, newNodeId);
+        assertEquals(3, d.getNodes().size());
+        assertEquals(2, d.getElements().size());
+        assertTrue(d.findNodeById(newNodeId).isPresent());
+        assertEquals(4.0, d.findNodeById(newNodeId).get().getX(), 1e-9);
+        assertTrue(d.getElements().stream().anyMatch(e ->
+                e.getNodeStartId() == 1 && e.getNodeEndId() == newNodeId));
+        assertTrue(d.getElements().stream().anyMatch(e ->
+                e.getNodeStartId() == newNodeId && e.getNodeEndId() == 2));
+        for (BeamElement e : d.getElements()) {
+            assertEquals(7, e.getMaterialId());
+            assertEquals(2.5, e.getArea(), 1e-9);
+            assertEquals(4.5, e.getInertia(), 1e-9);
+        }
+    }
+
+    @Test
     public void testDeletionCascade() {
         FEAData d = new FEAData();
         d.addNode(new Node(1, 0.0, 0.0));

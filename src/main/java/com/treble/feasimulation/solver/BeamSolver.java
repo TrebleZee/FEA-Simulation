@@ -29,15 +29,38 @@ import java.util.Map;
 public class BeamSolver {
     private static final double DEFAULT_E = 2.0e11; // Pa, fallback
 
+    public static class BendingStressResult {
+        public final int elementId;
+        public final double extremeFiberDistance;
+        public final double maxBendingMoment;
+        public final double maxTensileStress;
+        public final double maxCompressiveStress;
+
+        public BendingStressResult(int elementId, double extremeFiberDistance, double maxBendingMoment,
+                                   double maxTensileStress, double maxCompressiveStress) {
+            this.elementId = elementId;
+            this.extremeFiberDistance = extremeFiberDistance;
+            this.maxBendingMoment = maxBendingMoment;
+            this.maxTensileStress = maxTensileStress;
+            this.maxCompressiveStress = maxCompressiveStress;
+        }
+    }
+
     public static class ElementResult {
         public final int elementId;
         public final double endMomentStart;
         public final double endMomentEnd;
+        public final BendingStressResult bendingStress;
 
         public ElementResult(int elementId, double endMomentStart, double endMomentEnd) {
+            this(elementId, endMomentStart, endMomentEnd, null);
+        }
+
+        public ElementResult(int elementId, double endMomentStart, double endMomentEnd, BendingStressResult bendingStress) {
             this.elementId = elementId;
             this.endMomentStart = endMomentStart;
             this.endMomentEnd = endMomentEnd;
+            this.bendingStress = bendingStress;
         }
     }
 
@@ -50,6 +73,33 @@ public class BeamSolver {
             this.displacements = displacements;
             this.elementResults = elementResults;
         }
+    }
+
+    /**
+     * Compute the maximum bending stress for a beam element from its end moments.
+     * The solver does not store section depth directly, so the outer-fiber distance is
+     * estimated from area and inertia using a rectangular-equivalent section:
+     * c = sqrt(3I/A).
+     */
+    public BendingStressResult computeBendingStress(BeamElement beam, double endMomentStart, double endMomentEnd) {
+        double c = estimateExtremeFiberDistance(beam);
+        double maxMoment = Math.max(Math.abs(endMomentStart), Math.abs(endMomentEnd));
+
+        if (Double.isNaN(c) || beam.getInertia() <= 0.0) {
+            return new BendingStressResult(beam.getId(), c, maxMoment, Double.NaN, Double.NaN);
+        }
+
+        double maxStress = maxMoment * c / beam.getInertia();
+        return new BendingStressResult(beam.getId(), c, maxMoment, maxStress, -maxStress);
+    }
+
+    private double estimateExtremeFiberDistance(BeamElement beam) {
+        double area = beam.getArea();
+        double inertia = beam.getInertia();
+        if (area > 0.0 && inertia > 0.0) {
+            return Math.sqrt(3.0 * inertia / area);
+        }
+        return Double.NaN;
     }
 
     public Result solve(FEAData data) {
@@ -272,7 +322,8 @@ public class BeamSolver {
 
             double M1 = felocal[2]; // rotation DOF at node 1 index 2
             double M2 = felocal[5]; // rotation DOF at node 2 index 5
-            elemResults.add(new ElementResult(be.getId(), M1, M2));
+            BendingStressResult stress = computeBendingStress(be, M1, M2);
+            elemResults.add(new ElementResult(be.getId(), M1, M2, stress));
         }
 
         return new Result(u, elemResults);
