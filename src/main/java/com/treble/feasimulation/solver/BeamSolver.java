@@ -260,3 +260,4 @@ public class BeamSolver {
 
         return new Result(u, elemResults);
     }
+}
