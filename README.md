@@ -43,6 +43,24 @@ A simple introduction to structural analysis.
 - How loads and supports affect a structure
 - Basic MVP architecture for the app
 
+**Phase 1 Completion Status (2026-06-05)**
+
+- [x] **Drawing Tool**: Tool-based architecture supporting Beams and Truss Members.
+- [x] **Geometry**: Node dragging, element splitting, and deletion (Nodes/Elements/Supports/Loads).
+- [x] **Materials**: Integrated material library with presets.
+- [x] **Solver**: 2D Direct Stiffness Method supporting Euler-Bernoulli beams and axial truss members.
+- [x] **Visualization**: 
+    - Full 2D deformed shape (ux, uy).
+    - Color-coded moment diagrams with spatial offset.
+    - Stress summary for tension and compression.
+- [x] **Education**: Plain-English result explanation with yield prediction.
+
+**Phase 1 Limitations**
+- Bending moments are only visualized for Beam elements.
+- Shear force diagrams are not yet implemented.
+- Distributed loads (line loads) are not yet supported.
+- UI does not yet allow editing material properties of existing elements (must delete and redraw).
+
 ### Phase 2 – Truss Simulator (Medium Difficulty)
 A step up into full structural systems.
 

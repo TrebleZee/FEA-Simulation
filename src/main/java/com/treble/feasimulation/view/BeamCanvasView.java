@@ -109,6 +109,7 @@ public class BeamCanvasView {
             Point2D p = new Point2D(e.getX(), e.getY());
             Integer elId = findNearestElementId(p, HIT_TOLERANCE);
             ContextMenu menu = new ContextMenu();
+
             if (elId != null) {
                 MenuItem delete = new MenuItem("Delete Element");
                 delete.setOnAction(ae -> {
@@ -117,9 +118,16 @@ public class BeamCanvasView {
                 });
                 menu.getItems().add(delete);
             }
-            // also offer delete support or load if clicking near a node
+
             int nearNodeForMenu = findNearestNodeId(p, HIT_TOLERANCE);
             if (nearNodeForMenu >= 0) {
+                MenuItem deleteNode = new MenuItem("Delete Node");
+                deleteNode.setOnAction(ae -> {
+                    model.removeNodeById(nearNodeForMenu);
+                    redraw();
+                });
+                menu.getItems().add(deleteNode);
+
                 // supports attached to this node
                 for (com.treble.feasimulation.model.Support s : model.getSupports()) {
                     if (s.getNodeId() == nearNodeForMenu) {
@@ -388,10 +396,18 @@ public class BeamCanvasView {
                 if (nodes.get(i).getId() == nt.getId()) ti = i;
             }
             if (si < 0 || ti < 0) continue;
+            double u1 = r.displacements[3*si];
             double v1 = r.displacements[3*si + 1];
+            double u2 = r.displacements[3*ti];
             double v2 = r.displacements[3*ti + 1];
-            // screen y increases down, so add displacement directly (solver used fy with inverted sign earlier)
-            g.strokeLine(ns.getX(), ns.getY() + v1*scale, nt.getX(), nt.getY() + v2*scale);
+
+            // screen y increases down. Displacements are already in screen orientation-consistent values
+            double x1_def = ns.getX() + u1 * scale;
+            double y1_def = ns.getY() + v1 * scale;
+            double x2_def = nt.getX() + u2 * scale;
+            double y2_def = nt.getY() + v2 * scale;
+
+            g.strokeLine(x1_def, y1_def, x2_def, y2_def);
         }
     }
 
@@ -416,20 +432,40 @@ public class BeamCanvasView {
             double m1 = (er==null?0.0:er.endMomentStart);
             double m2 = (er==null?0.0:er.endMomentEnd);
 
+            double dx = nt.getX() - ns.getX();
+            double dy = nt.getY() - ns.getY();
+            double L = Math.hypot(dx, dy);
+            if (L < 1e-6) continue;
+            double nx = -dy / L;
+            double ny = dx / L;
+
+            double diagramScale = 0.05; // pixels per N*m, heuristic
+
             for (int i = 0; i < samples; i++) {
                 double t0 = (double)i / samples;
                 double t1 = (double)(i+1) / samples;
-                double x0 = ns.getX() + (nt.getX()-ns.getX())*t0;
-                double y0 = ns.getY() + (nt.getY()-ns.getY())*t0;
-                double x1 = ns.getX() + (nt.getX()-ns.getX())*t1;
-                double y1 = ns.getY() + (nt.getY()-ns.getY())*t1;
+                
                 double m0 = m1 + (m2 - m1)*t0;
                 double m1v = m1 + (m2 - m1)*t1;
+
+                double x0 = ns.getX() + dx*t0 + nx * m0 * diagramScale;
+                double y0 = ns.getY() + dy*t0 + ny * m0 * diagramScale;
+                double x1 = ns.getX() + dx*t1 + nx * m1v * diagramScale;
+                double y1 = ns.getY() + dy*t1 + ny * m1v * diagramScale;
+                
                 double mv = 0.5*(m0 + m1v);
                 Color c = colorForMoment(mv, maxM);
                 g.setStroke(c);
-                g.setLineWidth(6);
+                g.setLineWidth(2);
                 g.strokeLine(x0, y0, x1, y1);
+                
+                // optional: draw connecting lines to base element
+                if (i == 0 || i == samples - 1) {
+                    g.setLineWidth(1);
+                    g.setStroke(Color.LIGHTGRAY);
+                    g.strokeLine(ns.getX() + dx * (i == 0 ? 0 : 1), ns.getY() + dy * (i == 0 ? 0 : 1), 
+                                 (i == 0 ? x0 : x1), (i == 0 ? y0 : y1));
+                }
             }
         }
     }

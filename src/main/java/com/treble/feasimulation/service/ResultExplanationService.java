@@ -24,79 +24,96 @@ public class ResultExplanationService {
         }
 
         double maxAbsM = 0.0;
-        BeamSolver.ElementResult worstEr = null;
-        BeamElement worstElem = null;
-        boolean worstAtStart = true;
+        double maxAbsAxial = 0.0;
+        BeamSolver.ElementResult worstErM = null;
+        BeamSolver.ElementResult worstErA = null;
+        Element worstElemM = null;
+        boolean worstAtStartM = true;
 
-        // find element with largest absolute end moment
         for (BeamSolver.ElementResult er : result.elementResults) {
             double m1 = Math.abs(er.endMomentStart);
             double m2 = Math.abs(er.endMomentEnd);
             if (m1 >= maxAbsM) {
                 maxAbsM = m1;
-                worstEr = er;
-                worstAtStart = true;
+                worstErM = er;
+                worstAtStartM = true;
             }
             if (m2 >= maxAbsM) {
                 maxAbsM = m2;
-                worstEr = er;
-                worstAtStart = false;
+                worstErM = er;
+                worstAtStartM = false;
+            }
+            if (Math.abs(er.axialForce) > maxAbsAxial) {
+                maxAbsAxial = Math.abs(er.axialForce);
+                worstErA = er;
             }
         }
-
-        if (worstEr == null) {
-            return "No bending moments present in results.";
-        }
-
-        // locate associated element and node
-        worstElem = findElementById(model, worstEr.elementId);
-
-        String locDesc = "an unknown location";
-        if (worstElem != null) {
-            int nodeId = worstAtStart ? worstElem.getNodeStartId() : worstElem.getNodeEndId();
-            Optional<Node> nopt = model.findNodeById(nodeId);
-            if (nopt.isPresent()) {
-                Node n = nopt.get();
-                locDesc = String.format("element %d, %s end (node %d at [%.1f, %.1f])",
-                        worstElem.getId(), (worstAtStart ? "start" : "end"), n.getId(), n.getX(), n.getY());
-            } else {
-                locDesc = String.format("element %d, %s end", worstElem.getId(), (worstAtStart ? "start" : "end"));
-            }
-        }
-
-        String stressNote = describeStress(worstEr);
-        String failureNote = describeFailurePrediction(result, model);
-        String materialNote = describeMaterial(worstElem, model);
 
         StringBuilder summary = new StringBuilder();
-        summary.append(String.format("Maximum absolute bending moment: %.3e. The most critical location is %s.",
-                maxAbsM, locDesc));
-        if (!stressNote.isEmpty()) {
-            summary.append(' ').append(stressNote);
+        if (worstErM != null && maxAbsM > 1e-9) {
+            worstElemM = findElementById(model, worstErM.elementId);
+            String locDescM = describeLocation(model, worstElemM, worstAtStartM);
+            summary.append(String.format("Maximum absolute bending moment: %.3e N*m at %s.", maxAbsM, locDescM));
         }
+
+        if (worstErA != null && maxAbsAxial > 1e-9) {
+            Element worstElemA = findElementById(model, worstErA.elementId);
+            summary.append(String.format(" Maximum axial force: %.3e N (%s) in element %d.",
+                    maxAbsAxial, (worstErA.axialForce >= 0 ? "tension" : "compression"), worstErA.elementId));
+        }
+
+        if (summary.length() == 0) {
+            return "No significant forces or moments present in results.";
+        }
+
+        // find overall worst element for stress summary
+        BeamSolver.ElementResult worstErStress = null;
+        double maxStress = -1.0;
+        for (BeamSolver.ElementResult er : result.elementResults) {
+            double s = maxAbsoluteStress(er.bendingStress);
+            if (s > maxStress) {
+                maxStress = s;
+                worstErStress = er;
+            }
+        }
+
+        if (worstErStress != null) {
+            summary.append(" ").append(describeStress(worstErStress));
+        }
+
+        String failureNote = describeFailurePrediction(result, model);
         if (!failureNote.isEmpty()) {
             summary.append(' ').append(failureNote);
         }
-        if (!materialNote.isEmpty()) {
-            summary.append(' ').append(materialNote);
-        }
 
         return summary.toString();
+    }
+
+    private String describeLocation(FEAData model, Element elem, boolean atStart) {
+        if (elem == null) return "an unknown location";
+        int nodeId = atStart ? elem.getNodeStartId() : elem.getNodeEndId();
+        Optional<Node> nopt = model.findNodeById(nodeId);
+        if (nopt.isPresent()) {
+            Node n = nopt.get();
+            return String.format("element %d, %s end (node %d at [%.1f, %.1f])",
+                    elem.getId(), (atStart ? "start" : "end"), n.getId(), n.getX(), n.getY());
+        }
+        return String.format("element %d, %s end", elem.getId(), (atStart ? "start" : "end"));
     }
 
     private String describeStress(BeamSolver.ElementResult worstEr) {
         if (worstEr.bendingStress != null && !Double.isNaN(worstEr.bendingStress.maxTensileStress)) {
             BeamSolver.BendingStressResult stress = worstEr.bendingStress;
             return String.format(
-                    "Estimated outer-fiber distance y is about %.3e m. Max tensile stress is about %.3e Pa and max compressive stress is about %.3e Pa.",
-                    stress.extremeFiberDistance, stress.maxTensileStress, stress.maxCompressiveStress);
+                    "Max tensile stress is about %.3e Pa and max compressive stress is about %.3e Pa.",
+                    stress.maxTensileStress, stress.maxCompressiveStress);
         }
-        return "Bending stress could not be estimated from the available section properties.";
+        return "Stress could not be estimated.";
     }
 
     private String describeFailurePrediction(BeamSolver.Result result, FEAData model) {
         BeamSolver.ElementResult criticalEr = null;
-        BeamElement criticalElem = null;
+        Element criticalElem = null;
         Material criticalMat = null;
         double criticalStress = Double.NaN;
         double criticalYield = Double.NaN;
@@ -107,7 +124,7 @@ public class ResultExplanationService {
                 continue;
             }
 
-            BeamElement elem = findElementById(model, er.elementId);
+            Element elem = findElementById(model, er.elementId);
             if (elem == null || elem.getMaterialId() == 0) {
                 continue;
             }
@@ -139,42 +156,32 @@ public class ResultExplanationService {
         }
 
         if (criticalEr == null || criticalElem == null || criticalMat == null) {
-            return "Failure prediction: material yield stress is not defined for the available materials, so failure cannot be assessed.";
+            return "Failure prediction: Yield stress undefined.";
         }
 
         double safetyFactor = 1.0 / criticalUtilization;
         String state = criticalUtilization > 1.0
-                ? "likely to fail by yielding"
-                : "unlikely to fail under this load";
+                ? "likely to fail"
+                : "unlikely to fail";
         String governingStressType = governingStressType(criticalEr.bendingStress);
 
         return String.format(
-                "Failure prediction: element %d reaches about %.3e Pa in %s versus a yield stress of %.3e Pa (utilization %.2f, safety factor %.2f), so the beam is %s.",
-                criticalElem.getId(), criticalStress, governingStressType, criticalYield, criticalUtilization, safetyFactor, state);
+                "Failure prediction: element %d reaches about %.3e Pa in %s versus yield of %.3e Pa (SF=%.2f), beam is %s.",
+                criticalElem.getId(), criticalStress, governingStressType, criticalYield, safetyFactor, state);
     }
 
-    private String describeMaterial(BeamElement worstElem, FEAData model) {
+    private String describeMaterial(Element worstElem, FEAData model) {
         if (worstElem != null && worstElem.getMaterialId() != 0) {
             Material mat = findMaterialById(model, worstElem.getMaterialId());
             if (mat != null) {
-                if (Double.isFinite(mat.getYieldStress()) && mat.getYieldStress() > 0.0) {
-                    return String.format("Material: %s (E=%.3e, density=%.3f, yield=%.3e).",
-                            mat.getName(), mat.getYoungsModulus(), mat.getDensity(), mat.getYieldStress());
-                }
-                return String.format("Material: %s (E=%.3e, density=%.3f).",
-                        mat.getName(), mat.getYoungsModulus(), mat.getDensity());
+                return String.format("Material: %s (E=%.3e).", mat.getName(), mat.getYoungsModulus());
             }
         }
         return "";
     }
 
-    private BeamElement findElementById(FEAData model, int elementId) {
-        for (Element e : model.getElements()) {
-            if (e.getId() == elementId && e instanceof BeamElement) {
-                return (BeamElement) e;
-            }
-        }
-        return null;
+    private Element findElementById(FEAData model, int elementId) {
+        return model.findElementById(elementId).orElse(null);
     }
 
     private Material findMaterialById(FEAData model, int materialId) {

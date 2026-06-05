@@ -37,6 +37,7 @@ public class MainPresenter implements Presenter {
         // Wire simple actions
         view.getExitItem().setOnAction(e -> Platform.exit());
         view.getClearItem().setOnAction(e -> {
+            model.clear();
             canvasView.clear();
             canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.DRAW);
             view.clearStressSummary();

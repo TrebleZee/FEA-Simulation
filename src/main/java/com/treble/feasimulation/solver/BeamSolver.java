@@ -137,17 +137,23 @@ public class BeamSolver {
         public final int elementId;
         public final double endMomentStart;
         public final double endMomentEnd;
+        public final double axialForce;
         public final BendingStressResult bendingStress;
 
         public ElementResult(int elementId, double endMomentStart, double endMomentEnd) {
-            this(elementId, endMomentStart, endMomentEnd, null);
+            this(elementId, endMomentStart, endMomentEnd, 0.0, null);
         }
 
-        public ElementResult(int elementId, double endMomentStart, double endMomentEnd, BendingStressResult bendingStress) {
+        public ElementResult(int elementId, double endMomentStart, double endMomentEnd, double axialForce, BendingStressResult bendingStress) {
             this.elementId = elementId;
             this.endMomentStart = endMomentStart;
             this.endMomentEnd = endMomentEnd;
+            this.axialForce = axialForce;
             this.bendingStress = bendingStress;
+        }
+
+        public ElementResult(int elementId, double endMomentStart, double endMomentEnd, BendingStressResult bendingStress) {
+            this(elementId, endMomentStart, endMomentEnd, 0.0, bendingStress);
         }
     }
 
@@ -471,10 +477,8 @@ public class BeamSolver {
         // compute element end moments (use local coordinates)
         List<ElementResult> elemResults = new ArrayList<>();
         for (Element e : elements) {
-            if (!(e instanceof BeamElement be)) continue;
-
-            Integer si = nodeIndex.get(be.getNodeStartId());
-            Integer ti = nodeIndex.get(be.getNodeEndId());
+            Integer si = nodeIndex.get(e.getNodeStartId());
+            Integer ti = nodeIndex.get(e.getNodeEndId());
             if (si == null || ti == null) continue;
             Node ns = nodes.get(si);
             Node nt = nodes.get(ti);
@@ -483,22 +487,25 @@ public class BeamSolver {
             double L = Math.hypot(dx, dy);
             if (L <= 1e-12) continue;
 
-            double E = resolveYoungsModulus(be, data);
-            double A = be.getArea();
-            double I = be.getInertia();
+            double E = resolveYoungsModulus(e, data);
+            double A = e.getArea();
+            double I = (e instanceof BeamElement be) ? be.getInertia() : 0.0;
 
-            // rebuild local ke (6x6) as above
+            // rebuild local ke (6x6)
             double[][] ke = new double[6][6];
             double EA = E * A; double kax = EA / L;
             ke[0][0] = kax; ke[0][3] = -kax; ke[3][0] = -kax; ke[3][3] = kax;
-            double coef = E * I / (L * L * L);
-            double[][] kb = new double[4][4];
-            kb[0][0] = 12.0 * coef; kb[0][1] = 6.0 * L * coef; kb[0][2] = -12.0 * coef; kb[0][3] = 6.0 * L * coef;
-            kb[1][0] = 6.0 * L * coef; kb[1][1] = 4.0 * L * L * coef; kb[1][2] = -6.0 * L * coef; kb[1][3] = 2.0 * L * L * coef;
-            kb[2][0] = -12.0 * coef; kb[2][1] = -6.0 * L * coef; kb[2][2] = 12.0 * coef; kb[2][3] = -6.0 * L * coef;
-            kb[3][0] = 6.0 * L * coef; kb[3][1] = 2.0 * L * L * coef; kb[3][2] = -6.0 * L * coef; kb[3][3] = 4.0 * L * L * coef;
-            int[] bIdx = new int[]{1,2,4,5};
-            for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) ke[bIdx[a]][bIdx[b]] = kb[a][b];
+            
+            if (e instanceof BeamElement) {
+                double coef = E * I / (L * L * L);
+                double[][] kb = new double[4][4];
+                kb[0][0] = 12.0 * coef; kb[0][1] = 6.0 * L * coef; kb[0][2] = -12.0 * coef; kb[0][3] = 6.0 * L * coef;
+                kb[1][0] = 6.0 * L * coef; kb[1][1] = 4.0 * L * L * coef; kb[1][2] = -6.0 * L * coef; kb[1][3] = 2.0 * L * L * coef;
+                kb[2][0] = -12.0 * coef; kb[2][1] = -6.0 * L * coef; kb[2][2] = 12.0 * coef; kb[2][3] = -6.0 * L * coef;
+                kb[3][0] = 6.0 * L * coef; kb[3][1] = 2.0 * L * L * coef; kb[3][2] = -6.0 * L * coef; kb[3][3] = 4.0 * L * L * coef;
+                int[] bIdx = new int[]{1,2,4,5};
+                for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) ke[bIdx[a]][bIdx[b]] = kb[a][b];
+            }
 
             // transformation matrix T (local -> global)
             double c = dx / L, s = dy / L;
@@ -510,7 +517,7 @@ public class BeamSolver {
             double[] uglob = new double[6];
             for (int i = 0; i < 6; i++) uglob[i] = u[dofMap[i]];
 
-            // u_local = T^T * u_global (T orthonormal blocks)
+            // u_local = T^T * u_global
             double[] ulocal = new double[6];
             for (int i = 0; i < 6; i++) {
                 double sum = 0.0;
@@ -518,7 +525,7 @@ public class BeamSolver {
                 ulocal[i] = sum;
             }
 
-            // fe_local = ke * u_local (element forces in local coords)
+            // fe_local = ke * u_local
             double[] felocal = new double[6];
             for (int i = 0; i < 6; i++) {
                 double sum = 0.0;
@@ -526,10 +533,25 @@ public class BeamSolver {
                 felocal[i] = sum;
             }
 
-            double M1 = felocal[2]; // rotation DOF at node 1 index 2
-            double M2 = felocal[5]; // rotation DOF at node 2 index 5
-            BendingStressResult stress = computeBendingStress(be, M1, M2);
-            elemResults.add(new ElementResult(be.getId(), M1, M2, stress));
+            double axial = -felocal[0]; // axial force (tension positive)
+            double M1 = felocal[2];
+            double M2 = felocal[5];
+
+            BendingStressResult stress;
+            if (e instanceof BeamElement be) {
+                stress = computeBendingStress(be, M1, M2);
+                // add axial stress component
+                if (A > 0) {
+                    double sigmaAxial = axial / A;
+                    stress = new BendingStressResult(be.getId(), stress.extremeFiberDistance, stress.maxBendingMoment,
+                            stress.maxTensileStress + sigmaAxial, stress.maxCompressiveStress + sigmaAxial);
+                }
+            } else {
+                // Truss element
+                double sigma = (A > 0) ? axial / A : 0.0;
+                stress = new BendingStressResult(e.getId(), 0.0, 0.0, sigma, sigma);
+            }
+            elemResults.add(new ElementResult(e.getId(), M1, M2, axial, stress));
         }
 
         return new Result(u, elemResults);

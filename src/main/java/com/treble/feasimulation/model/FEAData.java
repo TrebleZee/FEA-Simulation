@@ -26,6 +26,14 @@ public class FEAData {
     public void addSupport(Support s) { supports.add(s); }
     public void addPointLoad(PointLoad p) { pointLoads.add(p); }
 
+    public void clear() {
+        nodes.clear();
+        elements.clear();
+        loads.clear();
+        supports.clear();
+        pointLoads.clear();
+    }
+
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
     public List<Element> getElements() { return Collections.unmodifiableList(elements); }
     public List<Material> getMaterials() { return Collections.unmodifiableList(materials); }
@@ -53,13 +61,8 @@ public class FEAData {
      *         exactly on one of the element's ends.
      */
     public int splitElementAtPoint(int elementId, double x, double y) {
-        Element base = findElementById(elementId)
+        Element original = findElementById(elementId)
                 .orElseThrow(() -> new IllegalArgumentException("Element not found: " + elementId));
-
-        if (!(base instanceof BeamElement)) {
-            throw new UnsupportedOperationException("Splitting only supported for BeamElements currently");
-        }
-        BeamElement original = (BeamElement) base;
 
         Node start = findNodeById(original.getNodeStartId())
                 .orElseThrow(() -> new IllegalStateException("Start node not found for element " + elementId));
@@ -78,10 +81,19 @@ public class FEAData {
         addNode(new Node(newNodeId, x, y));
 
         removeElementById(elementId);
-        addElement(new BeamElement(nextElementId(), start.getId(), newNodeId,
-                original.getMaterialId(), original.getArea(), original.getInertia()));
-        addElement(new BeamElement(nextElementId(), newNodeId, end.getId(),
-                original.getMaterialId(), original.getArea(), original.getInertia()));
+        if (original instanceof BeamElement be) {
+            addElement(new BeamElement(nextElementId(), start.getId(), newNodeId,
+                    be.getMaterialId(), be.getArea(), be.getInertia()));
+            addElement(new BeamElement(nextElementId(), newNodeId, end.getId(),
+                    be.getMaterialId(), be.getArea(), be.getInertia()));
+        } else if (original instanceof TrussElement te) {
+            addElement(new TrussElement(nextElementId(), start.getId(), newNodeId,
+                    te.getMaterialId(), te.getArea()));
+            addElement(new TrussElement(nextElementId(), newNodeId, end.getId(),
+                    te.getMaterialId(), te.getArea()));
+        } else {
+            throw new UnsupportedOperationException("Splitting not supported for element type: " + original.getClass().getSimpleName());
+        }
 
         return newNodeId;
     }
