@@ -19,6 +19,9 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 import com.treble.feasimulation.model.Support;
 import com.treble.feasimulation.model.PointLoad;
@@ -74,6 +77,7 @@ public class BeamCanvasView {
 
     // result storage
     private com.treble.feasimulation.solver.BeamSolver.Result lastResult = null;
+    private com.treble.feasimulation.solver.TrussSolver.Result lastTrussResult = null;
     private double lastScale = 1.0;
     private Runnable onModelUpdate;
     public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
@@ -246,6 +250,8 @@ public class BeamCanvasView {
         if (lastResult != null) {
             drawMomentDiagram(g, lastResult);
             drawDeformedShape(g, lastResult, lastScale);
+        } else if (lastTrussResult != null) {
+            drawTrussResult(g, lastTrussResult, lastScale);
         }
 
         // draw nodes
@@ -387,8 +393,59 @@ public class BeamCanvasView {
 
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
         this.lastResult = r;
+        this.lastTrussResult = null;
         this.lastScale = scale;
         redraw();
+    }
+
+    public void showTrussResult(com.treble.feasimulation.solver.TrussSolver.Result r, double scale) {
+        this.lastTrussResult = r;
+        this.lastResult = null;
+        this.lastScale = scale;
+        redraw();
+    }
+
+    private void drawTrussResult(GraphicsContext g, com.treble.feasimulation.solver.TrussSolver.Result r, double scale) {
+        // Draw deformed shape in red/blue based on axial force
+        List<Node> nodes = model.getNodes();
+        Map<Integer, Integer> nodeIndex = new HashMap<>();
+        for (int i = 0; i < nodes.size(); i++) nodeIndex.put(nodes.get(i).getId(), i);
+
+        double maxAbsForce = 0;
+        for (var er : r.elementResults) maxAbsForce = Math.max(maxAbsForce, Math.abs(er.axialForce));
+
+        for (com.treble.feasimulation.solver.TrussSolver.ElementResult er : r.elementResults) {
+            Integer si = nodeIndex.get(er.nodeStartId);
+            Integer ti = nodeIndex.get(er.nodeEndId);
+            if (si == null || ti == null) continue;
+
+            Node ns = nodes.get(si);
+            Node nt = nodes.get(ti);
+
+            double u1 = r.displacements[2 * si];
+            double v1 = r.displacements[2 * si + 1];
+            double u2 = r.displacements[2 * ti];
+            double v2 = r.displacements[2 * ti + 1];
+
+            double x1_def = ns.getX() + u1 * scale;
+            double y1_def = ns.getY() + v1 * scale;
+            double x2_def = nt.getX() + u2 * scale;
+            double y2_def = nt.getY() + v2 * scale;
+
+            // Color: Tension = Red, Compression = Blue
+            double intensity = maxAbsForce > 0 ? Math.abs(er.axialForce) / maxAbsForce : 1.0;
+            if (er.axialForce > 1e-6) {
+                // Tension
+                g.setStroke(Color.color(1.0, 1.0 - intensity * 0.8, 1.0 - intensity * 0.8));
+            } else if (er.axialForce < -1e-6) {
+                // Compression
+                g.setStroke(Color.color(1.0 - intensity * 0.8, 1.0 - intensity * 0.8, 1.0));
+            } else {
+                g.setStroke(Color.GRAY);
+            }
+            g.setLineWidth(3);
+            g.strokeLine(x1_def, y1_def, x2_def, y2_def);
+        }
     }
 
     private void drawDeformedShape(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {

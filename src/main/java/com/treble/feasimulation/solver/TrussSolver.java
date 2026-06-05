@@ -20,21 +20,31 @@ public class TrussSolver {
         public final int elementId;
         public final double axialForce; // Tension positive
         public final double axialStress;
+        public final int nodeStartId;
+        public final int nodeEndId;
 
-        public ElementResult(int elementId, double axialForce, double axialStress) {
+        public ElementResult(int elementId, double axialForce, double axialStress, int nodeStartId, int nodeEndId) {
             this.elementId = elementId;
             this.axialForce = axialForce;
             this.axialStress = axialStress;
+            this.nodeStartId = nodeStartId;
+            this.nodeEndId = nodeEndId;
         }
     }
 
     public static class Result {
         public final double[] displacements; // [ux0, uy0, ux1, uy1, ...]
         public final List<ElementResult> elementResults;
+        public final double maxDisplacement;
+        public final double maxStress;
+        public final double minStress;
 
-        public Result(double[] displacements, List<ElementResult> elementResults) {
+        public Result(double[] displacements, List<ElementResult> elementResults, double maxDisplacement, double maxStress, double minStress) {
             this.displacements = displacements;
             this.elementResults = elementResults;
+            this.maxDisplacement = maxDisplacement;
+            this.maxStress = maxStress;
+            this.minStress = minStress;
         }
     }
 
@@ -43,7 +53,7 @@ public class TrussSolver {
         List<Element> elements = data.getElements();
 
         int nNodes = nodes.size();
-        if (nNodes == 0) return new Result(new double[0], new ArrayList<>());
+        if (nNodes == 0) return new Result(new double[0], new ArrayList<>(), 0, 0, 0);
 
         Map<Integer, Integer> nodeIndex = new HashMap<>();
         for (int i = 0; i < nodes.size(); i++) nodeIndex.put(nodes.get(i).getId(), i);
@@ -121,7 +131,7 @@ public class TrussSolver {
         Arrays.fill(freeMap, -1);
         for (int i = 0; i < ndof; i++) if (!fixed[i]) freeMap[i] = freeCount++;
 
-        if (freeCount == 0) return new Result(new double[ndof], new ArrayList<>());
+        if (freeCount == 0) return new Result(new double[ndof], new ArrayList<>(), 0, 0, 0);
 
         DMatrixRMaj Ared = new DMatrixRMaj(freeCount, freeCount);
         DMatrixRMaj bred = new DMatrixRMaj(freeCount, 1);
@@ -142,12 +152,21 @@ public class TrussSolver {
         solver.solve(bred, xred);
 
         double[] fullU = new double[ndof];
+        double maxDispSq = 0;
         for (int i = 0; i < ndof; i++) {
             if (freeMap[i] >= 0) fullU[i] = xred.get(freeMap[i], 0);
+        }
+        for (int i = 0; i < nNodes; i++) {
+            double ux = fullU[2 * i];
+            double uy = fullU[2 * i + 1];
+            maxDispSq = Math.max(maxDispSq, ux * ux + uy * uy);
         }
 
         // Compute member forces and stresses
         List<ElementResult> elementResults = new ArrayList<>();
+        double maxStress = Double.NEGATIVE_INFINITY;
+        double minStress = Double.POSITIVE_INFINITY;
+
         for (Element e : elements) {
             if (!(e instanceof TrussElement te)) continue;
 
@@ -179,10 +198,18 @@ public class TrussSolver {
             double force = (E * A / L) * deltaL;
             double stress = (A > 0) ? force / A : 0.0;
 
-            elementResults.add(new ElementResult(te.getId(), force, stress));
+            maxStress = Math.max(maxStress, stress);
+            minStress = Math.min(minStress, stress);
+
+            elementResults.add(new ElementResult(te.getId(), force, stress, te.getNodeStartId(), te.getNodeEndId()));
         }
 
-        return new Result(fullU, elementResults);
+        if (elementResults.isEmpty()) {
+            maxStress = 0;
+            minStress = 0;
+        }
+
+        return new Result(fullU, elementResults, Math.sqrt(maxDispSq), maxStress, minStress);
     }
 
     private double resolveYoungsModulus(Element element, FEAData data) {

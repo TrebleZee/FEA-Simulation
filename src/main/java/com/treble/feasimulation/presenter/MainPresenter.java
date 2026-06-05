@@ -196,18 +196,29 @@ public class MainPresenter implements Presenter {
             }
 
             // Run the solver
-            BeamSolver solver = new BeamSolver();
-            BeamSolver.Result r = solver.solve(model);
-            
-            // choose a visual scale (pixels per meter). Provide a simple heuristic
-            double scale = 100.0; // user-adjustable later
-            canvasView.showResult(r, scale);
-            updateStressSummary(r);
+            if (isPureTruss()) {
+                com.treble.feasimulation.solver.TrussSolver solver = new com.treble.feasimulation.solver.TrussSolver();
+                com.treble.feasimulation.solver.TrussSolver.Result r = solver.solve(model);
+                double scale = 100.0;
+                canvasView.showTrussResult(r, scale);
+                updateTrussStressSummary(r);
+                view.getExplanationArea().setText(String.format(
+                        "Truss analysis complete.\nMax Displacement: %.3e m\nMax Stress: %.3e Pa\nMin Stress: %.3e Pa",
+                        r.maxDisplacement, r.maxStress, r.minStress));
+            } else {
+                BeamSolver solver = new BeamSolver();
+                BeamSolver.Result r = solver.solve(model);
 
-            // generate plain-English explanation and show in side panel
-            ResultExplanationService expl = new ResultExplanationService();
-            String explanation = expl.explain(r, model);
-            view.getExplanationArea().setText(explanation);
+                // choose a visual scale (pixels per meter). Provide a simple heuristic
+                double scale = 100.0; // user-adjustable later
+                canvasView.showResult(r, scale);
+                updateStressSummary(r);
+
+                // generate plain-English explanation and show in side panel
+                ResultExplanationService expl = new ResultExplanationService();
+                String explanation = expl.explain(r, model);
+                view.getExplanationArea().setText(explanation);
+            }
         } catch (IllegalStateException ise) {
             // solver-level numerical issues (singularity, etc.)
             view.clearStressSummary();
@@ -429,6 +440,19 @@ public class MainPresenter implements Presenter {
     @Override
     public void start() {
         // placeholder: load model, initialize state
+    }
+
+    private boolean isPureTruss() {
+        if (model.getElements().isEmpty()) return false;
+        for (com.treble.feasimulation.model.Element e : model.getElements()) {
+            if (!(e instanceof com.treble.feasimulation.model.TrussElement)) return false;
+        }
+        return true;
+    }
+
+    private void updateTrussStressSummary(com.treble.feasimulation.solver.TrussSolver.Result result) {
+        view.getMaxTensileStressLabel().setText(String.format("%.3e Pa", result.maxStress));
+        view.getMaxCompressiveStressLabel().setText(String.format("%.3e Pa", result.minStress));
     }
 
     private void updateStressSummary(BeamSolver.Result result) {
