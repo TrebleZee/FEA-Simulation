@@ -1,4 +1,4 @@
-﻿package com.treble.feasimulation.solver;
+package com.treble.feasimulation.solver;
 
 import com.treble.feasimulation.model.BeamElement;
 import com.treble.feasimulation.model.FEAData;
