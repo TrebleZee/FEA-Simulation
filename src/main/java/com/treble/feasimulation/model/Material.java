@@ -42,8 +42,10 @@ public class Material {
     @Override
     public String toString() {
         if (Double.isFinite(yieldStress) && yieldStress > 0.0) {
-            return "Material{" + id + ": " + name + ", yield=" + yieldStress + "}";
+            return String.format("Material{%d: %s, E=%.3e, density=%.3f, yield=%.3e}",
+                    id, name, youngsModulus, density, yieldStress);
         }
-        return "Material{" + id + ": " + name + "}";
+        return String.format("Material{%d: %s, E=%.3e, density=%.3f}",
+                id, name, youngsModulus, density);
     }
 }

@@ -3,6 +3,7 @@ package com.treble.feasimulation.view;
 import com.treble.feasimulation.model.BeamElement;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Node;
+import com.treble.feasimulation.model.MaterialLibrary;
 import javafx.application.Platform;
 import javafx.geometry.Point2D;
 import javafx.scene.canvas.Canvas;
@@ -48,6 +49,7 @@ public class BeamCanvasView {
 
     private Mode mode = Mode.DRAW;
     private Support.Type placingSupportType = Support.Type.FIXED;
+    private int placingBeamMaterialId = MaterialLibrary.getDefaultMaterial().getId();
     private double placingLoadMagnitude = 0.0;
     private double placingLoadAngleDeg = 270.0;
 
@@ -155,7 +157,7 @@ public class BeamCanvasView {
 
             // Create beam element
             int eid = model.nextElementId();
-            BeamElement be = new BeamElement(eid, tempStartNodeId, endNodeId, 0, 1.0, 1.0);
+            BeamElement be = new BeamElement(eid, tempStartNodeId, endNodeId, placingBeamMaterialId, 1.0, 1.0);
             model.addElement(be);
 
             tempStartNodeId = null;
@@ -396,6 +398,7 @@ public class BeamCanvasView {
     public Mode getMode() { return mode; }
 
     public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
+    public void setPlacingBeamMaterialId(int materialId) { this.placingBeamMaterialId = materialId; }
     public void setPlacingLoad(double magnitude, double angleDeg) { this.placingLoadMagnitude = magnitude; this.placingLoadAngleDeg = angleDeg; }
 
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {

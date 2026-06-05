@@ -14,6 +14,9 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.geometry.Insets;
 
+import com.treble.feasimulation.model.Material;
+import com.treble.feasimulation.model.MaterialLibrary;
+
 public class MainView {
     private final BorderPane root = new BorderPane();
     private final MenuBar menuBar = new MenuBar();
@@ -23,6 +26,7 @@ public class MainView {
 
     // Side panel controls
     private final ChoiceBox<String> supportTypeChoice;
+    private final ChoiceBox<Material> beamMaterialChoice;
     private final Button placeSupportButton;
     private final TextField loadMagnitudeField;
     private final TextField loadAngleField;
@@ -58,6 +62,10 @@ public class MainView {
         supportTypeChoice.setValue("FIXED");
         placeSupportButton = new Button("Place Support (click node)");
 
+        beamMaterialChoice = new ChoiceBox<>();
+        beamMaterialChoice.getItems().addAll(MaterialLibrary.getPresets());
+        beamMaterialChoice.setValue(MaterialLibrary.getDefaultMaterial());
+
         loadMagnitudeField = new TextField("1000");
         loadAngleField = new TextField("270"); // degrees, 270 = downward
         applyLoadButton = new Button("Apply Point Load (click beam or node)");
@@ -75,6 +83,7 @@ public class MainView {
 
         VBox side = new VBox(8,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
+                new Label("Beam Material:"), beamMaterialChoice,
                 new Label("Point Load magnitude:"), loadMagnitudeField,
                 new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField,
                 new Label("Click a beam or node to place the load."), applyLoadButton,
@@ -101,6 +110,7 @@ public class MainView {
 
     // Side panel getters
     public ChoiceBox<String> getSupportTypeChoice() { return supportTypeChoice; }
+    public ChoiceBox<Material> getBeamMaterialChoice() { return beamMaterialChoice; }
     public Button getPlaceSupportButton() { return placeSupportButton; }
     public TextField getLoadMagnitudeField() { return loadMagnitudeField; }
     public TextField getLoadAngleField() { return loadAngleField; }

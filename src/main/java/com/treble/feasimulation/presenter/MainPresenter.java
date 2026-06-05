@@ -1,6 +1,8 @@
 package com.treble.feasimulation.presenter;
 
 import com.treble.feasimulation.model.FEAData;
+import com.treble.feasimulation.model.Material;
+import com.treble.feasimulation.model.MaterialLibrary;
 import com.treble.feasimulation.view.BeamCanvasView;
 import com.treble.feasimulation.view.MainView;
 import com.treble.feasimulation.service.ResultExplanationService;
@@ -16,6 +18,19 @@ public class MainPresenter implements Presenter {
         this.model = model;
         this.view = view;
         this.canvasView = new BeamCanvasView(view.getCanvas(), model);
+
+        for (Material material : MaterialLibrary.getPresets()) {
+            boolean present = model.getMaterials().stream().anyMatch(existing -> existing.getId() == material.getId());
+            if (!present) {
+                model.addMaterial(material);
+            }
+        }
+        canvasView.setPlacingBeamMaterialId(view.getBeamMaterialChoice().getValue().getId());
+        view.getBeamMaterialChoice().getSelectionModel().selectedItemProperty().addListener((obs, oldMaterial, newMaterial) -> {
+            if (newMaterial != null) {
+                canvasView.setPlacingBeamMaterialId(newMaterial.getId());
+            }
+        });
 
         // Wire simple actions
         view.getExitItem().setOnAction(e -> Platform.exit());
