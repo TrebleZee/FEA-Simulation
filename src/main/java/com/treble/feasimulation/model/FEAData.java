@@ -11,15 +11,24 @@ public class FEAData {
     private final List<Material> materials = new ArrayList<>();
     private final List<Load> loads = new ArrayList<>();
 
+    // new collections for beam-specific features
+    private final List<Support> supports = new ArrayList<>();
+    private final List<PointLoad> pointLoads = new ArrayList<>();
+
     public void addNode(Node n) { nodes.add(n); }
     public void addElement(Element e) { elements.add(e); }
     public void addMaterial(Material m) { materials.add(m); }
     public void addLoad(Load l) { loads.add(l); }
 
+    public void addSupport(Support s) { supports.add(s); }
+    public void addPointLoad(PointLoad p) { pointLoads.add(p); }
+
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
     public List<Element> getElements() { return Collections.unmodifiableList(elements); }
     public List<Material> getMaterials() { return Collections.unmodifiableList(materials); }
     public List<Load> getLoads() { return Collections.unmodifiableList(loads); }
+    public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
+    public List<PointLoad> getPointLoads() { return Collections.unmodifiableList(pointLoads); }
 
     // Lookup helpers
     public Optional<Node> findNodeById(int id) {

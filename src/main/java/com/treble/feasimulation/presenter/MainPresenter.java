@@ -17,7 +17,34 @@ public class MainPresenter implements Presenter {
 
         // Wire simple actions
         view.getExitItem().setOnAction(e -> Platform.exit());
-        view.getClearItem().setOnAction(e -> canvasView.clear());
+        view.getClearItem().setOnAction(e -> {
+            canvasView.clear();
+            canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.DRAW);
+        });
+
+        // Support placement
+        view.getPlaceSupportButton().setOnAction(e -> {
+            String sel = view.getSupportTypeChoice().getValue();
+            try {
+                com.treble.feasimulation.model.Support.Type t = com.treble.feasimulation.model.Support.Type.valueOf(sel);
+                canvasView.setPlacingSupportType(t);
+                canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.PLACE_SUPPORT);
+            } catch (Exception ex) {
+                // ignore
+            }
+        });
+
+        // Point load placement
+        view.getApplyLoadButton().setOnAction(e -> {
+            try {
+                double mag = Double.parseDouble(view.getLoadMagnitudeField().getText());
+                double ang = Double.parseDouble(view.getLoadAngleField().getText());
+                canvasView.setPlacingLoad(mag, ang);
+                canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.PLACE_LOAD);
+            } catch (NumberFormatException ex) {
+                // ignore invalid input
+            }
+        });
     }
 
     @Override

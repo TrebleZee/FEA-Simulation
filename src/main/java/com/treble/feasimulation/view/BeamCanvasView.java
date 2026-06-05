@@ -15,9 +15,19 @@ import javafx.scene.paint.Color;
 
 import java.util.Optional;
 
+import com.treble.feasimulation.model.Support;
+import com.treble.feasimulation.model.PointLoad;
+
 public class BeamCanvasView {
+    public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, NONE }
+
     private final Canvas canvas;
     private final FEAData model;
+
+    private Mode mode = Mode.DRAW;
+    private Support.Type placingSupportType = Support.Type.FIXED;
+    private double placingLoadMagnitude = 0.0;
+    private double placingLoadAngleDeg = 270.0;
 
     private Integer tempStartNodeId = null;
     private double tempStartX, tempStartY;
@@ -46,43 +56,82 @@ public class BeamCanvasView {
     }
 
     private void onMouseClicked(MouseEvent e) {
-        if (e.getButton() == MouseButton.PRIMARY) {
-            // Left click: create beam endpoints
-            Point2D p = new Point2D(e.getX(), e.getY());
+        if (e.getButton() != MouseButton.PRIMARY) return;
+        Point2D p = new Point2D(e.getX(), e.getY());
+
+        // Modes: place support, place load, or draw beams
+        if (mode == Mode.PLACE_SUPPORT) {
             int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
-            if (tempStartNodeId == null) {
-                if (nearNode >= 0) {
-                    tempStartNodeId = nearNode;
-                    Node n = model.findNodeById(nearNode).orElseThrow();
-                    tempStartX = n.getX(); tempStartY = n.getY();
-                } else {
-                    int nid = model.nextNodeId();
-                    Node n = new Node(nid, p.getX(), p.getY());
-                    model.addNode(n);
-                    tempStartNodeId = nid;
-                    tempStartX = p.getX(); tempStartY = p.getY();
-                }
-                redraw();
+            int nodeId;
+            if (nearNode >= 0) {
+                nodeId = nearNode;
             } else {
-                int endNodeId;
-                if (nearNode >= 0) {
-                    endNodeId = nearNode;
-                } else {
-                    endNodeId = model.nextNodeId();
-                    Node n = new Node(endNodeId, p.getX(), p.getY());
-                    model.addNode(n);
-                }
-
-                // Create beam element
-                int eid = model.nextElementId();
-                BeamElement be = new BeamElement(eid, tempStartNodeId, endNodeId, 0, 1.0, 1.0);
-                model.addElement(be);
-
-                tempStartNodeId = null;
-                redraw();
+                nodeId = model.nextNodeId();
+                model.addNode(new Node(nodeId, p.getX(), p.getY()));
             }
+            int sid = model.nextElementId(); // reuse element id generator for simplicity for ids; could add dedicated
+            Support s = new Support(sid, nodeId, placingSupportType);
+            model.addSupport(s);
+            redraw();
             e.consume();
+            return;
         }
+
+        if (mode == Mode.PLACE_LOAD) {
+            int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
+            int nodeId;
+            if (nearNode >= 0) {
+                nodeId = nearNode;
+            } else {
+                nodeId = model.nextNodeId();
+                model.addNode(new Node(nodeId, p.getX(), p.getY()));
+            }
+            // convert magnitude & angle to fx, fy (y screen grows downwards so invert sin)
+            double rad = Math.toRadians(placingLoadAngleDeg);
+            double fx = placingLoadMagnitude * Math.cos(rad);
+            double fy = -placingLoadMagnitude * Math.sin(rad);
+            int lid = model.nextElementId();
+            PointLoad pl = new PointLoad(lid, nodeId, fx, fy);
+            model.addPointLoad(pl);
+            redraw();
+            e.consume();
+            return;
+        }
+
+        // Default: drawing beams
+        int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
+        if (tempStartNodeId == null) {
+            if (nearNode >= 0) {
+                tempStartNodeId = nearNode;
+                Node n = model.findNodeById(nearNode).orElseThrow();
+                tempStartX = n.getX(); tempStartY = n.getY();
+            } else {
+                int nid = model.nextNodeId();
+                Node n = new Node(nid, p.getX(), p.getY());
+                model.addNode(n);
+                tempStartNodeId = nid;
+                tempStartX = p.getX(); tempStartY = p.getY();
+            }
+            redraw();
+        } else {
+            int endNodeId;
+            if (nearNode >= 0) {
+                endNodeId = nearNode;
+            } else {
+                endNodeId = model.nextNodeId();
+                Node n = new Node(endNodeId, p.getX(), p.getY());
+                model.addNode(n);
+            }
+
+            // Create beam element
+            int eid = model.nextElementId();
+            BeamElement be = new BeamElement(eid, tempStartNodeId, endNodeId, 0, 1.0, 1.0);
+            model.addElement(be);
+
+            tempStartNodeId = null;
+            redraw();
+        }
+        e.consume();
     }
 
     private void onMousePressed(MouseEvent e) {
@@ -184,6 +233,40 @@ public class BeamCanvasView {
             g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
         }
 
+        // draw supports
+        g.setFill(Color.DARKGREEN);
+        for (Support s : model.getSupports()) {
+            model.findNodeById(s.getNodeId()).ifPresent(n -> {
+                double x = n.getX(); double y = n.getY();
+                switch (s.getType() == null ? Support.Type.PINNED : s.getType()) {
+                    case FIXED:
+                        g.fillRect(x-6, y+6, 12, 6);
+                        break;
+                    case PINNED:
+                        g.fillOval(x-6, y+6, 12, 6);
+                        break;
+                    case ROLLER:
+                        g.strokeOval(x-8, y+6, 16, 6);
+                        break;
+                }
+            });
+        }
+
+        // draw point loads
+        g.setStroke(Color.MAGENTA);
+        for (PointLoad pl : model.getPointLoads()) {
+            model.findNodeById(pl.getNodeId()).ifPresent(n -> {
+                double x = n.getX(); double y = n.getY();
+                double len = 20;
+                // derive arrow direction from fx,fy
+                double fx = pl.getFx(); double fy = pl.getFy();
+                double ang = Math.atan2(-fy, fx); // invert fy for screen
+                double x2 = x + len * Math.cos(ang);
+                double y2 = y - len * Math.sin(ang);
+                g.strokeLine(x, y, x2, y2);
+            });
+        }
+
         // draw temp start marker
         if (tempStartNodeId != null) {
             g.setFill(Color.GREEN);
@@ -234,4 +317,11 @@ public class BeamCanvasView {
     }
 
     public Canvas getCanvas() { return canvas; }
+
+    public void setMode(Mode m) { this.mode = m; }
+    public Mode getMode() { return mode; }
+
+    public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
+    public void setPlacingLoad(double magnitude, double angleDeg) { this.placingLoadMagnitude = magnitude; this.placingLoadAngleDeg = angleDeg; }
 }
+
