@@ -9,7 +9,7 @@ import com.treble.feasimulation.model.Support;
 
 import org.ejml.data.DMatrixRMaj;
 import org.ejml.interfaces.linsol.LinearSolverDense;
-import org.ejml.dense.row.linsol.LinearSolverFactory_DDRM;
+import org.ejml.dense.row.factory.LinearSolverFactory_DDRM;
 
 import java.util.ArrayList;
 import java.util.HashMap;
