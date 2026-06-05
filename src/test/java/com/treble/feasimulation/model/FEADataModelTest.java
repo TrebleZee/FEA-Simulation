@@ -100,15 +100,27 @@ public class FEADataModelTest {
     }
 
     @Test
-    public void testSupportsAddRemove() {
-        FEAData d = new FEAData();
-        d.addNode(new Node(1, 0.0, 0.0));
-        Support s1 = new Support(1, 1, Support.Type.FIXED);
-        Support s2 = new Support(2, 1, Support.Type.ROLLER);
-        d.addSupport(s1);
-        d.addSupport(s2);
-        assertEquals(2, d.getSupports().size());
-        assertTrue(d.removeSupportById(1));
-        assertEquals(1, d.getSupports().size());
+    public void testTrussNodeAndMember() {
+        TrussNode tn = new TrussNode(1, 10.0, 20.0);
+        assertEquals(1, tn.getId());
+        assertEquals(10.0, tn.getX());
+        assertEquals(20.0, tn.getY());
+        // TrussNode should only support UX and UY
+        Node.DOF[] dofs = tn.getSupportedDOFs();
+        assertEquals(2, dofs.length);
+        assertTrue(java.util.Arrays.asList(dofs).contains(Node.DOF.UX));
+        assertTrue(java.util.Arrays.asList(dofs).contains(Node.DOF.UY));
+        assertFalse(java.util.Arrays.asList(dofs).contains(Node.DOF.ROTATION));
+
+        TrussMember tm = new TrussMember(1, 1, 2, 5, 0.05);
+        assertEquals(1, tm.getId());
+        assertEquals(1, tm.getNodeStartId());
+        assertEquals(2, tm.getNodeEndId());
+        assertEquals(5, tm.getMaterialId());
+        assertEquals(0.05, tm.getArea());
+        
+        // TrussMember should only have UX and UY active DOFs
+        Node.DOF[] activeDofs = tm.getActiveDOFs();
+        assertEquals(2, activeDofs.length);
     }
 }

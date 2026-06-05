@@ -3,6 +3,8 @@ package com.treble.feasimulation.view;
 import com.treble.feasimulation.model.BeamElement;
 import com.treble.feasimulation.model.Element;
 import com.treble.feasimulation.model.TrussElement;
+import com.treble.feasimulation.model.TrussMember;
+import com.treble.feasimulation.model.TrussNode;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Node;
 import com.treble.feasimulation.model.MaterialLibrary;
@@ -487,6 +489,10 @@ public class BeamCanvasView {
         protected Point2D startPoint;
         protected Point2D mousePos;
 
+        protected Node createNode(int id, double x, double y) {
+            return new Node(id, x, y);
+        }
+
         @Override
         public void onClick(Point2D p, MouseEvent e) {
             if (e.getButton() != MouseButton.PRIMARY) return;
@@ -498,7 +504,7 @@ public class BeamCanvasView {
                     startPoint = new Point2D(n.getX(), n.getY());
                 } else {
                     int nid = model.nextNodeId();
-                    model.addNode(new Node(nid, p.getX(), p.getY()));
+                    model.addNode(createNode(nid, p.getX(), p.getY()));
                     startNodeId = nid;
                     startPoint = p;
                 }
@@ -508,7 +514,7 @@ public class BeamCanvasView {
                     endNodeId = nearNode;
                 } else {
                     endNodeId = model.nextNodeId();
-                    model.addNode(new Node(endNodeId, p.getX(), p.getY()));
+                    model.addNode(createNode(endNodeId, p.getX(), p.getY()));
                 }
                 createElement(startNodeId, endNodeId);
                 startNodeId = null;
@@ -549,9 +555,14 @@ public class BeamCanvasView {
 
     private class TrussTool extends BaseElementTool {
         @Override
+        protected Node createNode(int id, double x, double y) {
+            return new TrussNode(id, x, y);
+        }
+
+        @Override
         protected void createElement(int s, int e) {
             int eid = model.nextElementId();
-            model.addElement(new TrussElement(eid, s, e, placingBeamMaterialId, 1.0));
+            model.addElement(new TrussMember(eid, s, e, placingBeamMaterialId, 1.0));
         }
     }
 
