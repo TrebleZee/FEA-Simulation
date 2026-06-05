@@ -26,6 +26,7 @@ public class MainView {
     private final TextField loadMagnitudeField;
     private final TextField loadAngleField;
     private final Button applyLoadButton;
+    private final Button runButton;
 
     public MainView(double width, double height) {
         // Menu
@@ -57,13 +58,19 @@ public class MainView {
         loadAngleField = new TextField("270"); // degrees, 270 = downward
         applyLoadButton = new Button("Apply Point Load (click node)");
 
+        Button runButton = new Button("Run Simulation");
+
         VBox side = new VBox(8,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Point Load magnitude:"), loadMagnitudeField,
-                new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField, applyLoadButton);
+                new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField, applyLoadButton,
+                new Label(""), runButton);
         side.setPadding(new Insets(8));
         side.setPrefWidth(220);
         root.setRight(side);
+
+        // expose run button
+        this.runButton = runButton;
     }
 
     public BorderPane getRoot() { return root; }
@@ -78,4 +85,5 @@ public class MainView {
     public TextField getLoadMagnitudeField() { return loadMagnitudeField; }
     public TextField getLoadAngleField() { return loadAngleField; }
     public Button getApplyLoadButton() { return applyLoadButton; }
+    public Button getRunButton() { return runButton; }
 }

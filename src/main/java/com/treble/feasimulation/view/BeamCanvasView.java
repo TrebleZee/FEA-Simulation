@@ -36,6 +36,10 @@ public class BeamCanvasView {
 
     private Integer hoverElementId = null;
 
+    // result storage
+    private com.treble.feasimulation.solver.BeamSolver.Result lastResult = null;
+    private double lastScale = 1.0;
+
     private static final double NODE_RADIUS = 5.0;
     private static final double HIT_TOLERANCE = 8.0;
 
@@ -205,7 +209,7 @@ public class BeamCanvasView {
     private void redraw() {
         clear();
         GraphicsContext g = canvas.getGraphicsContext2D();
-        // draw elements
+        // draw elements (undeformed black)
         for (BeamElement be : model.getElements()) {
             Optional<Node> s = model.findNodeById(be.getNodeStartId());
             Optional<Node> t = model.findNodeById(be.getNodeEndId());
@@ -225,6 +229,12 @@ public class BeamCanvasView {
                 g.setFill(Color.BLUE);
                 g.fillText("E" + be.getId(), mx + 4, my - 4);
             }
+        }
+
+        // if we have results, draw deformed shape and moment diagram
+        if (lastResult != null) {
+            drawMomentDiagram(g, lastResult);
+            drawDeformedShape(g, lastResult, lastScale);
         }
 
         // draw nodes
@@ -323,5 +333,83 @@ public class BeamCanvasView {
 
     public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
     public void setPlacingLoad(double magnitude, double angleDeg) { this.placingLoadMagnitude = magnitude; this.placingLoadAngleDeg = angleDeg; }
+
+    public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
+        this.lastResult = r;
+        this.lastScale = scale;
+        redraw();
+    }
+
+    private void drawDeformedShape(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
+        // draw deformed shape in blue
+        g.setStroke(Color.CORNFLOWERBLUE);
+        g.setLineWidth(2);
+        for (com.treble.feasimulation.model.BeamElement be : model.getElements()) {
+            java.util.Optional<Node> s = model.findNodeById(be.getNodeStartId());
+            java.util.Optional<Node> t = model.findNodeById(be.getNodeEndId());
+            if (s.isEmpty() || t.isEmpty()) continue;
+            Node ns = s.get(); Node nt = t.get();
+            int si = -1, ti = -1;
+            java.util.List<Node> nodes = model.getNodes();
+            for (int i = 0; i < nodes.size(); i++) {
+                if (nodes.get(i).getId() == ns.getId()) si = i;
+                if (nodes.get(i).getId() == nt.getId()) ti = i;
+            }
+            if (si < 0 || ti < 0) continue;
+            double v1 = r.displacements[2*si];
+            double v2 = r.displacements[2*ti];
+            // screen y increases down, so add displacement directly (solver used fy with inverted sign earlier)
+            g.strokeLine(ns.getX(), ns.getY() + v1*scale, nt.getX(), nt.getY() + v2*scale);
+        }
+    }
+
+    private void drawMomentDiagram(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r) {
+        // map absolute moment to color ramp (blue -> white -> red)
+        double maxM = 0.0;
+        for (com.treble.feasimulation.solver.BeamSolver.ElementResult er : r.elementResults) {
+            maxM = Math.max(maxM, Math.abs(er.endMomentStart));
+            maxM = Math.max(maxM, Math.abs(er.endMomentEnd));
+        }
+        if (maxM < 1e-12) return;
+
+        int samples = 12;
+        for (com.treble.feasimulation.model.BeamElement be : model.getElements()) {
+            java.util.Optional<Node> s = model.findNodeById(be.getNodeStartId());
+            java.util.Optional<Node> t = model.findNodeById(be.getNodeEndId());
+            if (s.isEmpty() || t.isEmpty()) continue;
+            Node ns = s.get(); Node nt = t.get();
+            // find element result by id
+            com.treble.feasimulation.solver.BeamSolver.ElementResult er = null;
+            for (com.treble.feasimulation.solver.BeamSolver.ElementResult x : r.elementResults) if (x.elementId == be.getId()) { er = x; break; }
+            double m1 = (er==null?0.0:er.endMomentStart);
+            double m2 = (er==null?0.0:er.endMomentEnd);
+
+            for (int i = 0; i < samples; i++) {
+                double t0 = (double)i / samples;
+                double t1 = (double)(i+1) / samples;
+                double x0 = ns.getX() + (nt.getX()-ns.getX())*t0;
+                double y0 = ns.getY() + (nt.getY()-ns.getY())*t0;
+                double x1 = ns.getX() + (nt.getX()-ns.getX())*t1;
+                double y1 = ns.getY() + (nt.getY()-ns.getY())*t1;
+                double m0 = m1 + (m2 - m1)*t0;
+                double m1v = m1 + (m2 - m1)*t1;
+                double mv = 0.5*(m0 + m1v);
+                Color c = colorForMoment(mv, maxM);
+                g.setStroke(c);
+                g.setLineWidth(6);
+                g.strokeLine(x0, y0, x1, y1);
+            }
+        }
+    }
+
+    private Color colorForMoment(double m, double max) {
+        double v = Math.min(1.0, Math.abs(m) / max);
+        // simple blue-white-red: negative moments blue, positive red
+        if (m >= 0) {
+            return new Color(1.0, 1.0 - v, 1.0 - v, 0.8);
+        } else {
+            return new Color(1.0 - v, 1.0 - v, 1.0, 0.8);
+        }
+    }
 }
 

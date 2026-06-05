@@ -45,6 +45,19 @@ public class MainPresenter implements Presenter {
                 // ignore invalid input
             }
         });
+
+        // Run simulation
+        view.getRunButton().setOnAction(e -> {
+            try {
+                com.treble.feasimulation.solver.BeamSolver solver = new com.treble.feasimulation.solver.BeamSolver();
+                com.treble.feasimulation.solver.BeamSolver.Result r = solver.solve(model);
+                // choose a visual scale (pixels per meter). Provide a simple heuristic
+                double scale = 100.0; // user-adjustable later
+                canvasView.showResult(r, scale);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
     }
 
     @Override
