@@ -82,8 +82,8 @@ public class BeamSolverAdditionalTest {
         BeamSolver.Result r1 = s.solve(d1);
         BeamSolver.Result r2 = s.solve(d2);
 
-        double v1 = Math.abs(r1.displacements[2]);
-        double v2 = Math.abs(r2.displacements[2]);
+        double v1 = Math.abs(r1.displacements[3*1 + 1]);
+        double v2 = Math.abs(r2.displacements[3*1 + 1]);
         // softer material should give larger deflection
         assertTrue(v2 > v1, "Softer material should produce larger deflection");
     }

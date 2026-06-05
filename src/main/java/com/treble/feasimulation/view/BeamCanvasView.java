@@ -382,8 +382,8 @@ public class BeamCanvasView {
                 if (nodes.get(i).getId() == nt.getId()) ti = i;
             }
             if (si < 0 || ti < 0) continue;
-            double v1 = r.displacements[2*si];
-            double v2 = r.displacements[2*ti];
+            double v1 = r.displacements[3*si + 1];
+            double v2 = r.displacements[3*ti + 1];
             // screen y increases down, so add displacement directly (solver used fy with inverted sign earlier)
             g.strokeLine(ns.getX(), ns.getY() + v1*scale, nt.getX(), nt.getY() + v2*scale);
         }
