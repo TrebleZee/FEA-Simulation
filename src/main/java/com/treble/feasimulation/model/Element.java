@@ -2,7 +2,7 @@ package com.treble.feasimulation.model;
 
 import java.util.Arrays;
 
-public class Element {
+public abstract class Element {
     private final int id;
     private final int[] nodeIds;
     private final int materialId;
@@ -21,12 +21,25 @@ public class Element {
         return nodeIds.clone();
     }
 
+    public int getNodeStartId() {
+        return nodeIds[0];
+    }
+
+    public int getNodeEndId() {
+        return nodeIds[nodeIds.length - 1];
+    }
+
     public int getMaterialId() {
         return materialId;
     }
 
+    /**
+     * @return the DOFs active for each node of this element.
+     */
+    public abstract Node.DOF[] getActiveDOFs();
+
     @Override
     public String toString() {
-        return "Element{" + id + ": nodes=" + Arrays.toString(nodeIds) + ", mat=" + materialId + "}";
+        return getClass().getSimpleName() + "{" + id + ": nodes=" + Arrays.toString(nodeIds) + ", mat=" + materialId + "}";
     }
 }

@@ -1,6 +1,8 @@
 package com.treble.feasimulation.model;
 
 public class Node {
+    public enum DOF { UX, UY, ROTATION }
+
     private final int id;
     private final double x;
     private final double y;
@@ -21,6 +23,14 @@ public class Node {
 
     public double getY() {
         return y;
+    }
+
+    /**
+     * @return the types of degrees of freedom supported by this node in 2D space.
+     * By default, 2D nodes support UX, UY, and ROTATION.
+     */
+    public DOF[] getSupportedDOFs() {
+        return DOF.values();
     }
 
     @Override

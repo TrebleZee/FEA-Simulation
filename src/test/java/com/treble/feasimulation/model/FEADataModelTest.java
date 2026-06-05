@@ -28,7 +28,7 @@ public class FEADataModelTest {
         BeamElement be = new BeamElement(1, 1, 2, 0, 1.0, 1e-6);
         d.addElement(be);
         assertEquals(1, d.getElements().size());
-        BeamElement stored = d.getElements().get(0);
+        Element stored = d.getElements().get(0);
         assertEquals(1, stored.getNodeStartId());
         assertEquals(2, stored.getNodeEndId());
     }
@@ -51,10 +51,12 @@ public class FEADataModelTest {
                 e.getNodeStartId() == 1 && e.getNodeEndId() == newNodeId));
         assertTrue(d.getElements().stream().anyMatch(e ->
                 e.getNodeStartId() == newNodeId && e.getNodeEndId() == 2));
-        for (BeamElement e : d.getElements()) {
-            assertEquals(7, e.getMaterialId());
-            assertEquals(2.5, e.getArea(), 1e-9);
-            assertEquals(4.5, e.getInertia(), 1e-9);
+        for (Element e : d.getElements()) {
+            assertTrue(e instanceof BeamElement);
+            BeamElement be = (BeamElement) e;
+            assertEquals(7, be.getMaterialId());
+            assertEquals(2.5, be.getArea(), 1e-9);
+            assertEquals(4.5, be.getInertia(), 1e-9);
         }
     }
 

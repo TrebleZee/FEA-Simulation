@@ -10,7 +10,7 @@ import java.util.Optional;
  */
 public class FEAData {
     private final List<Node> nodes = new ArrayList<>();
-    private final List<BeamElement> elements = new ArrayList<>();
+    private final List<Element> elements = new ArrayList<>();
     private final List<Material> materials = new ArrayList<>();
     private final List<Load> loads = new ArrayList<>();
 
@@ -19,7 +19,7 @@ public class FEAData {
     private final List<PointLoad> pointLoads = new ArrayList<>();
 
     public void addNode(Node n) { nodes.add(n); }
-    public void addElement(BeamElement e) { elements.add(e); }
+    public void addElement(Element e) { elements.add(e); }
     public void addMaterial(Material m) { materials.add(m); }
     public void addLoad(Load l) { loads.add(l); }
 
@@ -27,7 +27,7 @@ public class FEAData {
     public void addPointLoad(PointLoad p) { pointLoads.add(p); }
 
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
-    public List<BeamElement> getElements() { return Collections.unmodifiableList(elements); }
+    public List<Element> getElements() { return Collections.unmodifiableList(elements); }
     public List<Material> getMaterials() { return Collections.unmodifiableList(materials); }
     public List<Load> getLoads() { return Collections.unmodifiableList(loads); }
     public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
@@ -53,8 +53,13 @@ public class FEAData {
      *         exactly on one of the element's ends.
      */
     public int splitElementAtPoint(int elementId, double x, double y) {
-        BeamElement original = findElementById(elementId)
+        Element base = findElementById(elementId)
                 .orElseThrow(() -> new IllegalArgumentException("Element not found: " + elementId));
+
+        if (!(base instanceof BeamElement)) {
+            throw new UnsupportedOperationException("Splitting only supported for BeamElements currently");
+        }
+        BeamElement original = (BeamElement) base;
 
         Node start = findNodeById(original.getNodeStartId())
                 .orElseThrow(() -> new IllegalStateException("Start node not found for element " + elementId));
@@ -85,7 +90,12 @@ public class FEAData {
         boolean removed = nodes.removeIf(n -> n.getId() == id);
         if (removed) {
             // remove elements referencing the node
-            elements.removeIf(e -> (e.getNodeStartId() == id) || (e.getNodeEndId() == id));
+            elements.removeIf(e -> {
+                for (int nodeId : e.getNodeIds()) {
+                    if (nodeId == id) return true;
+                }
+                return false;
+            });
             // remove supports and point loads attached to the node
             supports.removeIf(s -> s.getNodeId() == id);
             pointLoads.removeIf(p -> p.getNodeId() == id);
@@ -98,7 +108,7 @@ public class FEAData {
         return nodes.stream().filter(n -> n.getId() == id).findFirst();
     }
 
-    public Optional<BeamElement> findElementById(int id) {
+    public Optional<Element> findElementById(int id) {
         return elements.stream().filter(e -> e.getId() == id).findFirst();
     }
 
@@ -118,7 +128,7 @@ public class FEAData {
     }
 
     public int nextElementId() {
-        return elements.stream().mapToInt(BeamElement::getId).max().orElse(0) + 1;
+        return elements.stream().mapToInt(Element::getId).max().orElse(0) + 1;
     }
 }
 

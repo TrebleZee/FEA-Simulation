@@ -1,6 +1,8 @@
 package com.treble.feasimulation.view;
 
 import com.treble.feasimulation.model.BeamElement;
+import com.treble.feasimulation.model.Element;
+import com.treble.feasimulation.model.TrussElement;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Node;
 import com.treble.feasimulation.model.MaterialLibrary;
@@ -264,16 +266,16 @@ public class BeamCanvasView {
         clear();
         GraphicsContext g = canvas.getGraphicsContext2D();
         // draw elements (undeformed black)
-        for (BeamElement be : model.getElements()) {
-            Optional<Node> s = model.findNodeById(be.getNodeStartId());
-            Optional<Node> t = model.findNodeById(be.getNodeEndId());
+        for (Element e : model.getElements()) {
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isPresent() && t.isPresent()) {
                 Node ns = s.get(); Node nt = t.get();
-                if (hoverElementId != null && hoverElementId == be.getId()) {
+                if (hoverElementId != null && hoverElementId == e.getId()) {
                     g.setStroke(Color.ORANGE);
                     g.setLineWidth(3);
                 } else {
-                    g.setStroke(Color.BLACK);
+                    g.setStroke(e instanceof TrussElement ? Color.GRAY : Color.BLACK);
                     g.setLineWidth(2);
                 }
                 g.strokeLine(ns.getX(), ns.getY(), nt.getX(), nt.getY());
@@ -281,7 +283,7 @@ public class BeamCanvasView {
                 double mx = (ns.getX() + nt.getX()) / 2.0;
                 double my = (ns.getY() + nt.getY()) / 2.0;
                 g.setFill(Color.BLUE);
-                g.fillText("E" + be.getId(), mx + 4, my - 4);
+                g.fillText((e instanceof TrussElement ? "T" : "E") + e.getId(), mx + 4, my - 4);
             }
         }
 
@@ -359,9 +361,9 @@ public class BeamCanvasView {
         Integer best = null;
         double bestDist = Double.MAX_VALUE;
         Point2D bestProjection = null;
-        for (BeamElement be : model.getElements()) {
-            Optional<Node> s = model.findNodeById(be.getNodeStartId());
-            Optional<Node> t = model.findNodeById(be.getNodeEndId());
+        for (Element e : model.getElements()) {
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isPresent() && t.isPresent()) {
                 Point2D a = new Point2D(s.get().getX(), s.get().getY());
                 Point2D b = new Point2D(t.get().getX(), t.get().getY());
@@ -369,7 +371,7 @@ public class BeamCanvasView {
                 double dist = projection.distance;
                 if (dist < bestDist && dist <= tol) {
                     bestDist = dist;
-                    best = be.getId();
+                    best = e.getId();
                     bestProjection = projection.point;
                 }
             }
@@ -411,9 +413,9 @@ public class BeamCanvasView {
         // draw deformed shape in blue
         g.setStroke(Color.CORNFLOWERBLUE);
         g.setLineWidth(2);
-        for (com.treble.feasimulation.model.BeamElement be : model.getElements()) {
-            java.util.Optional<Node> s = model.findNodeById(be.getNodeStartId());
-            java.util.Optional<Node> t = model.findNodeById(be.getNodeEndId());
+        for (Element e : model.getElements()) {
+            java.util.Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            java.util.Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isEmpty() || t.isEmpty()) continue;
             Node ns = s.get(); Node nt = t.get();
             int si = -1, ti = -1;
@@ -440,14 +442,14 @@ public class BeamCanvasView {
         if (maxM < 1e-12) return;
 
         int samples = 12;
-        for (com.treble.feasimulation.model.BeamElement be : model.getElements()) {
-            java.util.Optional<Node> s = model.findNodeById(be.getNodeStartId());
-            java.util.Optional<Node> t = model.findNodeById(be.getNodeEndId());
+        for (Element e : model.getElements()) {
+            java.util.Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            java.util.Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isEmpty() || t.isEmpty()) continue;
             Node ns = s.get(); Node nt = t.get();
             // find element result by id
             com.treble.feasimulation.solver.BeamSolver.ElementResult er = null;
-            for (com.treble.feasimulation.solver.BeamSolver.ElementResult x : r.elementResults) if (x.elementId == be.getId()) { er = x; break; }
+            for (com.treble.feasimulation.solver.BeamSolver.ElementResult x : r.elementResults) if (x.elementId == e.getId()) { er = x; break; }
             double m1 = (er==null?0.0:er.endMomentStart);
             double m2 = (er==null?0.0:er.endMomentEnd);
 

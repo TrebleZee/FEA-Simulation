@@ -1,6 +1,7 @@
 package com.treble.feasimulation.service;
 
 import com.treble.feasimulation.model.BeamElement;
+import com.treble.feasimulation.model.Element;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Material;
 import com.treble.feasimulation.model.Node;
@@ -168,9 +169,9 @@ public class ResultExplanationService {
     }
 
     private BeamElement findElementById(FEAData model, int elementId) {
-        for (BeamElement be : model.getElements()) {
-            if (be.getId() == elementId) {
-                return be;
+        for (Element e : model.getElements()) {
+            if (e.getId() == elementId && e instanceof BeamElement) {
+                return (BeamElement) e;
             }
         }
         return null;
