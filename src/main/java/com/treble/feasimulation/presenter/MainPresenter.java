@@ -202,9 +202,11 @@ public class MainPresenter implements Presenter {
                 double scale = 100.0;
                 canvasView.showTrussResult(r, scale);
                 updateTrussStressSummary(r);
-                view.getExplanationArea().setText(String.format(
-                        "Truss analysis complete.\nMax Displacement: %.3e m\nMax Stress: %.3e Pa\nMin Stress: %.3e Pa",
-                        r.maxDisplacement, r.maxStress, r.minStress));
+
+                // generate plain-English explanation and show in side panel
+                ResultExplanationService expl = new ResultExplanationService();
+                String explanation = expl.explain(r, model);
+                view.getExplanationArea().setText(explanation);
             } else {
                 BeamSolver solver = new BeamSolver();
                 BeamSolver.Result r = solver.solve(model);
