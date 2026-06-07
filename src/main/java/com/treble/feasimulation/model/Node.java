@@ -33,6 +33,10 @@ public class Node {
         return DOF.values();
     }
 
+    public Node copyAt(double x, double y) {
+        return new Node(id, x, y);
+    }
+
     @Override
     public String toString() {
         return "Node{" + id + ": (" + x + "," + y + ")}";

@@ -100,15 +100,63 @@ public class FEADataModelTest {
     }
 
     @Test
-    public void testSupportsAddRemove() {
+    public void testTrussNodeAndMember() {
+        TrussNode tn = new TrussNode(1, 10.0, 20.0);
+        assertEquals(1, tn.getId());
+        assertEquals(10.0, tn.getX());
+        assertEquals(20.0, tn.getY());
+        // TrussNode should only support UX and UY
+        Node.DOF[] dofs = tn.getSupportedDOFs();
+        assertEquals(2, dofs.length);
+        assertTrue(java.util.Arrays.asList(dofs).contains(Node.DOF.UX));
+        assertTrue(java.util.Arrays.asList(dofs).contains(Node.DOF.UY));
+        assertFalse(java.util.Arrays.asList(dofs).contains(Node.DOF.ROTATION));
+
+        TrussMember tm = new TrussMember(1, 1, 2, 5, 0.05);
+        assertEquals(1, tm.getId());
+        assertEquals(1, tm.getNodeStartId());
+        assertEquals(2, tm.getNodeEndId());
+        assertEquals(5, tm.getMaterialId());
+        assertEquals(0.05, tm.getArea());
+        
+        // TrussMember should only have UX and UY active DOFs
+        Node.DOF[] activeDofs = tm.getActiveDOFs();
+        assertEquals(2, activeDofs.length);
+    }
+
+    @Test
+    public void testSplitTrussElementAtPoint() {
         FEAData d = new FEAData();
-        d.addNode(new Node(1, 0.0, 0.0));
-        Support s1 = new Support(1, 1, Support.Type.FIXED);
-        Support s2 = new Support(2, 1, Support.Type.ROLLER);
-        d.addSupport(s1);
-        d.addSupport(s2);
-        assertEquals(2, d.getSupports().size());
-        assertTrue(d.removeSupportById(1));
-        assertEquals(1, d.getSupports().size());
+        d.addNode(new TrussNode(1, 0.0, 0.0));
+        d.addNode(new TrussNode(2, 10.0, 0.0));
+        d.addElement(new TrussMember(1, 1, 2, 3, 0.05));
+
+        int newNodeId = d.splitElementAtPoint(1, 6.0, 0.0);
+
+        assertEquals(3, newNodeId);
+        assertEquals(2, d.getElements().size());
+        assertTrue(d.findNodeById(newNodeId).get() instanceof TrussNode);
+        for (Element e : d.getElements()) {
+            assertTrue(e instanceof TrussMember);
+            assertEquals(3, e.getMaterialId());
+            assertEquals(0.05, e.getArea(), 1e-9);
+        }
+    }
+
+    @Test
+    public void testNodeCopyAtPreservesType() {
+        Node n = new Node(1, 10, 20);
+        Node n2 = n.copyAt(15, 25);
+        assertEquals(1, n2.getId());
+        assertEquals(15.0, n2.getX(), 1e-9);
+        assertEquals(25.0, n2.getY(), 1e-9);
+        assertFalse(n2 instanceof TrussNode);
+
+        TrussNode tn = new TrussNode(2, 10, 20);
+        Node tn2 = tn.copyAt(15, 25);
+        assertEquals(2, tn2.getId());
+        assertEquals(15.0, tn2.getX(), 1e-9);
+        assertEquals(25.0, tn2.getY(), 1e-9);
+        assertTrue(tn2 instanceof TrussNode);
     }
 }

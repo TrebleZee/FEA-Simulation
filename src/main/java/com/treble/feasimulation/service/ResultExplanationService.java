@@ -6,6 +6,7 @@ import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Material;
 import com.treble.feasimulation.model.Node;
 import com.treble.feasimulation.solver.BeamSolver;
+import com.treble.feasimulation.solver.TrussSolver;
 
 import java.util.Optional;
 
@@ -84,6 +85,51 @@ public class ResultExplanationService {
         String failureNote = describeFailurePrediction(result, model);
         if (!failureNote.isEmpty()) {
             summary.append(' ').append(failureNote);
+        }
+
+        return summary.toString();
+    }
+
+    /**
+     * Produce a short plain-English explanation for truss solver results.
+     */
+    public String explain(TrussSolver.Result result, FEAData model) {
+        if (result == null || result.elementResults == null || result.elementResults.isEmpty()) {
+            return "No truss results to explain.";
+        }
+
+        TrussSolver.ElementResult worstEr = null;
+        double maxAbsStress = -1.0;
+
+        for (TrussSolver.ElementResult er : result.elementResults) {
+            double absStress = Math.abs(er.axialStress);
+            if (absStress > maxAbsStress) {
+                maxAbsStress = absStress;
+                worstEr = er;
+            }
+        }
+
+        if (worstEr == null || maxAbsStress < 1e-9) {
+            return "No significant stresses present in truss results.";
+        }
+
+        String type = worstEr.axialStress >= 0 ? "tension" : "compression";
+        StringBuilder summary = new StringBuilder();
+        summary.append(String.format("The most critical member is element %d, which is in %s with a stress of %.3e Pa.",
+                worstEr.elementId, type, maxAbsStress));
+
+        Element worstElem = findElementById(model, worstEr.elementId);
+        if (worstElem != null) {
+            Optional<Node> n1 = model.findNodeById(worstElem.getNodeStartId());
+            Optional<Node> n2 = model.findNodeById(worstElem.getNodeEndId());
+            if (n1.isPresent() && n2.isPresent()) {
+                summary.append(String.format(" It connects node %d to node %d.", n1.get().getId(), n2.get().getId()));
+            }
+        }
+
+        String failureNote = describeTrussFailurePrediction(result, model);
+        if (!failureNote.isEmpty()) {
+            summary.append(" ").append(failureNote);
         }
 
         return summary.toString();
@@ -168,6 +214,35 @@ public class ResultExplanationService {
         return String.format(
                 "Failure prediction: element %d reaches about %.3e Pa in %s versus yield of %.3e Pa (SF=%.2f), beam is %s.",
                 criticalElem.getId(), criticalStress, governingStressType, criticalYield, safetyFactor, state);
+    }
+
+    private String describeTrussFailurePrediction(TrussSolver.Result result, FEAData model) {
+        TrussSolver.ElementResult criticalEr = null;
+        double criticalUtilization = -1.0;
+        Material criticalMat = null;
+
+        for (TrussSolver.ElementResult er : result.elementResults) {
+            Element elem = findElementById(model, er.elementId);
+            if (elem == null) continue;
+            Material mat = findMaterialById(model, elem.getMaterialId());
+            if (mat == null || mat.getYieldStress() <= 0) continue;
+
+            double utilization = Math.abs(er.axialStress) / mat.getYieldStress();
+            if (utilization > criticalUtilization) {
+                criticalUtilization = utilization;
+                criticalEr = er;
+                criticalMat = mat;
+            }
+        }
+
+        if (criticalEr == null) return "";
+
+        double safetyFactor = 1.0 / criticalUtilization;
+        String state = criticalUtilization > 1.0 ? "likely to fail" : "unlikely to fail";
+        String type = criticalEr.axialStress >= 0 ? "tension" : "compression";
+
+        return String.format("Failure prediction: element %d reaches %.2f%% of its yield stress (%.3e Pa) in %s. The structure is %s (SF=%.2f).",
+                criticalEr.elementId, criticalUtilization * 100, criticalMat.getYieldStress(), type, state, safetyFactor);
     }
 
     private String describeMaterial(Element worstElem, FEAData model) {

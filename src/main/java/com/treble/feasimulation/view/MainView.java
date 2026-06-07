@@ -14,8 +14,15 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.geometry.Insets;
 
+import javafx.scene.control.TableView;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.Tab;
 import com.treble.feasimulation.model.Material;
 import com.treble.feasimulation.model.MaterialLibrary;
+import com.treble.feasimulation.model.PointLoad;
+import com.treble.feasimulation.model.Support;
 
 public class MainView {
     private final BorderPane root = new BorderPane();
@@ -29,14 +36,18 @@ public class MainView {
     private final ChoiceBox<String> supportTypeChoice;
     private final ChoiceBox<Material> beamMaterialChoice;
     private final Button drawElementButton;
+    private final Button trussModeButton;
     private final Button placeSupportButton;
-    private final TextField loadMagnitudeField;
-    private final TextField loadAngleField;
+    private final TextField loadFxField;
+    private final TextField loadFyField;
     private final Button applyLoadButton;
+    private final Button updateLoadButton;
     private final Button runButton;
     private final Label maxTensileStressLabel;
     private final Label maxCompressiveStressLabel;
     private final TextArea explanationArea;
+    private final javafx.scene.control.TableView<com.treble.feasimulation.model.PointLoad> pointLoadTable;
+    private final javafx.scene.control.TableView<com.treble.feasimulation.model.Support> supportTable;
 
     public MainView(double width, double height) {
         // Menu
@@ -63,6 +74,7 @@ public class MainView {
         elementTypeChoice.getItems().addAll("Beam", "Truss Member", "Polygon");
         elementTypeChoice.setValue("Beam");
         drawElementButton = new Button("Draw Elements");
+        trussModeButton = new Button("Truss Mode");
 
         supportTypeChoice = new ChoiceBox<>();
         supportTypeChoice.getItems().addAll("FIXED", "PINNED", "ROLLER");
@@ -73,9 +85,39 @@ public class MainView {
         beamMaterialChoice.getItems().addAll(MaterialLibrary.getPresets());
         beamMaterialChoice.setValue(MaterialLibrary.getDefaultMaterial());
 
-        loadMagnitudeField = new TextField("1000");
-        loadAngleField = new TextField("270"); // degrees, 270 = downward
+        loadFxField = new TextField("0");
+        loadFyField = new TextField("-1000");
         applyLoadButton = new Button("Apply Point Load (click beam or node)");
+        updateLoadButton = new Button("Update Selected Load");
+
+        pointLoadTable = new TableView<>();
+        TableColumn<PointLoad, Integer> plIdCol = new TableColumn<>("ID");
+        plIdCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        TableColumn<PointLoad, Integer> plNodeCol = new TableColumn<>("Node");
+        plNodeCol.setCellValueFactory(new PropertyValueFactory<>("nodeId"));
+        TableColumn<PointLoad, Double> plFxCol = new TableColumn<>("Fx");
+        plFxCol.setCellValueFactory(new PropertyValueFactory<>("fx"));
+        TableColumn<PointLoad, Double> plFyCol = new TableColumn<>("Fy");
+        plFyCol.setCellValueFactory(new PropertyValueFactory<>("fy"));
+        pointLoadTable.getColumns().addAll(plIdCol, plNodeCol, plFxCol, plFyCol);
+        pointLoadTable.setPrefHeight(150);
+
+        supportTable = new TableView<>();
+        TableColumn<Support, Integer> sIdCol = new TableColumn<>("ID");
+        sIdCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        TableColumn<Support, Integer> sNodeCol = new TableColumn<>("Node");
+        sNodeCol.setCellValueFactory(new PropertyValueFactory<>("nodeId"));
+        TableColumn<Support, String> sTypeCol = new TableColumn<>("Type");
+        sTypeCol.setCellValueFactory(new PropertyValueFactory<>("type"));
+        supportTable.getColumns().addAll(sIdCol, sNodeCol, sTypeCol);
+        supportTable.setPrefHeight(150);
+
+        TabPane tablesTabPane = new TabPane();
+        Tab loadsTab = new Tab("Loads", pointLoadTable);
+        loadsTab.setClosable(false);
+        Tab supportsTab = new Tab("Supports", supportTable);
+        supportsTab.setClosable(false);
+        tablesTabPane.getTabs().addAll(loadsTab, supportsTab);
 
         Button runButton = new Button("Run Simulation");
 
@@ -89,12 +131,13 @@ public class MainView {
         explanationArea.setPromptText("Result explanation will appear here.");
 
         VBox side = new VBox(8,
-                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton,
+                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, trussModeButton,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
-                new Label("Beam Material:"), beamMaterialChoice,
-                new Label("Point Load magnitude:"), loadMagnitudeField,
-                new Label("Point Load angle (deg, 0->right, 90->up):"), loadAngleField,
-                new Label("Click a beam or node to place the load."), applyLoadButton,
+                new Label("Material:"), beamMaterialChoice,
+                new Label("Point Load Fx:"), loadFxField,
+                new Label("Point Load Fy:"), loadFyField,
+                new Label("Click an element or node to place the load."), applyLoadButton, updateLoadButton,
+                new Label("Data Editing:"), tablesTabPane,
                 new Label(""), runButton,
                 new Label("Max Tensile Stress:"), maxTensileStressLabel,
                 new Label("Max Compressive Stress:"), maxCompressiveStressLabel,
@@ -119,16 +162,20 @@ public class MainView {
     // Side panel getters
     public ChoiceBox<String> getElementTypeChoice() { return elementTypeChoice; }
     public Button getDrawElementButton() { return drawElementButton; }
+    public Button getTrussModeButton() { return trussModeButton; }
     public ChoiceBox<String> getSupportTypeChoice() { return supportTypeChoice; }
     public ChoiceBox<Material> getBeamMaterialChoice() { return beamMaterialChoice; }
     public Button getPlaceSupportButton() { return placeSupportButton; }
-    public TextField getLoadMagnitudeField() { return loadMagnitudeField; }
-    public TextField getLoadAngleField() { return loadAngleField; }
+    public TextField getLoadFxField() { return loadFxField; }
+    public TextField getLoadFyField() { return loadFyField; }
     public Button getApplyLoadButton() { return applyLoadButton; }
+    public Button getUpdateLoadButton() { return updateLoadButton; }
     public Button getRunButton() { return runButton; }
     public Label getMaxTensileStressLabel() { return maxTensileStressLabel; }
     public Label getMaxCompressiveStressLabel() { return maxCompressiveStressLabel; }
     public TextArea getExplanationArea() { return explanationArea; }
+    public TableView<PointLoad> getPointLoadTable() { return pointLoadTable; }
+    public TableView<Support> getSupportTable() { return supportTable; }
 
     public void clearStressSummary() {
         maxTensileStressLabel.setText("N/A");

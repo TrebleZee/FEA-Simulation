@@ -78,7 +78,11 @@ public class FEAData {
         }
 
         int newNodeId = nextNodeId();
-        addNode(new Node(newNodeId, x, y));
+        if (original instanceof TrussElement) {
+            addNode(new TrussNode(newNodeId, x, y));
+        } else {
+            addNode(new Node(newNodeId, x, y));
+        }
 
         removeElementById(elementId);
         if (original instanceof BeamElement be) {
@@ -87,9 +91,9 @@ public class FEAData {
             addElement(new BeamElement(nextElementId(), newNodeId, end.getId(),
                     be.getMaterialId(), be.getArea(), be.getInertia()));
         } else if (original instanceof TrussElement te) {
-            addElement(new TrussElement(nextElementId(), start.getId(), newNodeId,
+            addElement(new TrussMember(nextElementId(), start.getId(), newNodeId,
                     te.getMaterialId(), te.getArea()));
-            addElement(new TrussElement(nextElementId(), newNodeId, end.getId(),
+            addElement(new TrussMember(nextElementId(), newNodeId, end.getId(),
                     te.getMaterialId(), te.getArea()));
         } else {
             throw new UnsupportedOperationException("Splitting not supported for element type: " + original.getClass().getSimpleName());
