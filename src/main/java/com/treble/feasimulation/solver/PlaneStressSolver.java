@@ -44,17 +44,28 @@ public class PlaneStressSolver implements FEASolver {
 
             // Update thickness and compute stiffness for elements
             for (TriangularElement element : mesh.getElements()) {
-                // TriangularElement is created with default thickness 1.0 in generator, 
-                // but we use the material thickness here.
-                // We'll create a new element with correct properties to be safe if needed, 
-                // but TriangularElement seems to have a thickness field.
-                // Let's assume we can use the one from mesh and just ensure stiffness is computed.
-                element.computeStiffnessMatrix(e, nu);
+                // Ensure we use the material thickness
+                // We create a new element to ensure all internal fields (like area) are consistent 
+                // but actually TriangularElement already has thickness from material.
+                // Wait, it was created with 1.0 in generator. 
+                // Let's use a reflected change or just set it if possible.
+                // TriangularElement.thickness is final, so we MUST recreate or change it.
+                // Easiest is to recreate here or modify TriangularElement.
+                TriangularElement correctElement = new TriangularElement(
+                    element.getId(),
+                    element.getNodes()[0],
+                    element.getNodes()[1],
+                    element.getNodes()[2],
+                    element.getMaterialId(),
+                    t
+                );
+                correctElement.computeStiffnessMatrix(e, nu);
+                allElements.add(correctElement);
             }
 
             regionToNodes.put(region.getId(), mesh.getNodes());
             allNodes.addAll(mesh.getNodes());
-            allElements.addAll(mesh.getElements());
+            // allElements.addAll(mesh.getElements()); // Replaced by the loop above
         }
 
         int nNodes = allNodes.size();
@@ -115,18 +126,37 @@ public class PlaneStressSolver implements FEASolver {
             if (es.getEdgeIndex() < 0 || es.getEdgeIndex() >= edges.size()) continue;
 
             PolygonRegion.Edge edge = edges.get(es.getEdgeIndex());
-            // In TriangularMeshGenerator, nodes are created in order of region vertices.
-            // So vertex index corresponds to node index in regionNodes.
-            Node n1 = regionNodes.get(edge.getStartVertexIndex());
-            Node n2 = regionNodes.get(edge.getEndVertexIndex());
+            // In TriangularMeshGenerator, nodes are created by subdividing edges.
+            // We need to find all nodes that lie on this edge.
+            Node vStart = regionNodes.get(edge.getStartVertexIndex());
+            Node vEnd = regionNodes.get(edge.getEndVertexIndex());
 
-            for (Node n : Arrays.asList(n1, n2)) {
-                int idx = nodeIdToIndex.get(n.getId());
-                if (es.getType() == Support.Type.FIXED || es.getType() == Support.Type.PINNED) {
-                    fixed[2 * idx] = true;
-                    fixed[2 * idx + 1] = true;
-                } else if (es.getType() == Support.Type.ROLLER) {
-                    fixed[2 * idx + 1] = true;
+            double x1 = vStart.getX();
+            double y1 = vStart.getY();
+            double x2 = vEnd.getX();
+            double y2 = vEnd.getY();
+
+            for (Node n : regionNodes) {
+                // Check if node n is on segment (x1,y1)-(x2,y2)
+                if (isNodeOnSegment(n, x1, y1, x2, y2)) {
+                    int idx = nodeIdToIndex.get(n.getId());
+                    if (es.getType() == Support.Type.FIXED || es.getType() == Support.Type.PINNED) {
+                        fixed[2 * idx] = true;
+                        fixed[2 * idx + 1] = true;
+                    } else if (es.getType() == Support.Type.ROLLER) {
+                        double dx = x2 - x1;
+                        double dy = y2 - y1;
+                        double L = Math.hypot(dx, dy);
+                        if (L > 1e-12) {
+                            double nx = -dy / L;
+                            double ny = dx / L;
+                            if (Math.abs(nx) > Math.abs(ny)) {
+                                fixed[2 * idx] = true;
+                            } else {
+                                fixed[2 * idx + 1] = true;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -154,21 +184,61 @@ public class PlaneStressSolver implements FEASolver {
             if (dl.getEdgeIndex() < 0 || dl.getEdgeIndex() >= edges.size()) continue;
 
             PolygonRegion.Edge edge = edges.get(dl.getEdgeIndex());
-            Node n1 = regionNodes.get(edge.getStartVertexIndex());
-            Node n2 = regionNodes.get(edge.getEndVertexIndex());
+            Node vStart = regionNodes.get(edge.getStartVertexIndex());
+            Node vEnd = regionNodes.get(edge.getEndVertexIndex());
 
-            double L = Math.hypot(n2.getX() - n1.getX(), n2.getY() - n1.getY());
-            double totalFx = dl.getWx() * L;
-            double totalFy = dl.getWy() * L;
+            double x1 = vStart.getX();
+            double y1 = vStart.getY();
+            double x2 = vEnd.getX();
+            double y2 = vEnd.getY();
 
-            // Distribute to the two nodes of the edge
-            int idx1 = nodeIdToIndex.get(n1.getId());
-            int idx2 = nodeIdToIndex.get(n2.getId());
+            // Find all nodes on this edge and sort them along the edge
+            List<Node> edgeNodes = new ArrayList<>();
+            for (Node n : regionNodes) {
+                if (isNodeOnSegment(n, x1, y1, x2, y2)) {
+                    edgeNodes.add(n);
+                }
+            }
 
-            F.add(2 * idx1, 0, totalFx / 2.0);
-            F.add(2 * idx1 + 1, 0, totalFy / 2.0);
-            F.add(2 * idx2, 0, totalFx / 2.0);
-            F.add(2 * idx2 + 1, 0, totalFy / 2.0);
+            // Sort edgeNodes from vStart to vEnd
+            edgeNodes.sort(Comparator.comparingDouble(n -> 
+                (n.getX() - x1) * (x2 - x1) + (n.getY() - y1) * (y2 - y1)));
+
+            for (int i = 0; i < edgeNodes.size() - 1; i++) {
+                Node n1 = edgeNodes.get(i);
+                Node n2 = edgeNodes.get(i + 1);
+
+                double dx = n2.getX() - n1.getX();
+                double dy = n2.getY() - n1.getY();
+                double L = Math.hypot(dx, dy);
+                if (L < 1e-12) continue;
+
+                double fx1, fy1, fx2, fy2;
+                
+                if (dl.getType() == DistributedLoad.Type.UNIFORM) {
+                    double nx = -dy / L;
+                    double ny = dx / L;
+                    double tx = dx / L;
+                    double ty = dy / L;
+
+                    double fx = dl.getWx() * nx + dl.getWy() * tx;
+                    double fy = dl.getWx() * ny + dl.getWy() * ty;
+
+                    fx1 = fx2 = fx * L / 2.0;
+                    fy1 = fy2 = fy * L / 2.0;
+                } else {
+                    fx1 = fx2 = dl.getWx() * L / 2.0;
+                    fy1 = fy2 = dl.getWy() * L / 2.0;
+                }
+
+                int idx1 = nodeIdToIndex.get(n1.getId());
+                int idx2 = nodeIdToIndex.get(n2.getId());
+
+                F.add(2 * idx1, 0, fx1);
+                F.add(2 * idx1 + 1, 0, fy1);
+                F.add(2 * idx2, 0, fx2);
+                F.add(2 * idx2 + 1, 0, fy2);
+            }
         }
 
         // 4. Solve System
@@ -220,6 +290,20 @@ public class PlaneStressSolver implements FEASolver {
         }
 
         return new PlaneStressResult(fullU, elementStresses, nodeIdToIndex, allElements);
+    }
+
+    private boolean isNodeOnSegment(Node n, double x1, double y1, double x2, double y2) {
+        double px = n.getX();
+        double py = n.getY();
+        
+        // Check if point is collinear with segment
+        // Cross product: (y2-y1)(px-x1) - (x2-x1)(py-y1) should be 0
+        double cross = (y2 - y1) * (px - x1) - (x2 - x1) * (py - y1);
+        if (Math.abs(cross) > 1e-7) return false;
+
+        // Check if point is within the bounding box of the segment
+        return px >= Math.min(x1, x2) - 1e-7 && px <= Math.max(x1, x2) + 1e-7 &&
+               py >= Math.min(y1, y2) - 1e-7 && py <= Math.max(y1, y2) + 1e-7;
     }
 
     private PlaneStressResult.ElementStress computeElementStress(TriangularElement element, double[] fullU, Map<Integer, Integer> nodeIdToIndex, double E, double nu) {

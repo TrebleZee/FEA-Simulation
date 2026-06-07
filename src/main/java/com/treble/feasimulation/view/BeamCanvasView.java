@@ -25,12 +25,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
+import com.treble.feasimulation.model.DistributedLoad;
 import com.treble.feasimulation.model.Support;
 import com.treble.feasimulation.model.PointLoad;
 import com.treble.feasimulation.solver.SolverResult;
 
 public class BeamCanvasView {
-    public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, POLYGON, NONE }
+    public enum Mode { DRAW, PLACE_SUPPORT, PLACE_EDGE_SUPPORT, PLACE_LOAD, PLACE_EDGE_LOAD, POLYGON, NONE }
     public enum ElementType { BEAM, TRUSS, POLYGON }
 
     private interface CanvasTool {
@@ -97,6 +98,9 @@ public class BeamCanvasView {
     private int placingBeamMaterialId = MaterialLibrary.getDefaultMaterial().getId();
     private double placingFx = 0.0;
     private double placingFy = -1000.0;
+    private double placingWx = 0.0;
+    private double placingWy = -1000.0;
+    private com.treble.feasimulation.model.DistributedLoad.Type placingDistributedLoadType = com.treble.feasimulation.model.DistributedLoad.Type.DIRECTIONAL;
 
     private Integer draggingNodeId = null;
     private Integer draggingPolygonId = null;
@@ -123,6 +127,15 @@ public class BeamCanvasView {
         this.onElementSelected = callback;
     }
     private double lastScale = 1.0;
+    public void setLastScale(double scale) {
+        this.lastScale = scale;
+        redraw();
+    }
+    private boolean showDisplacementArrows = false;
+    public void setShowDisplacementArrows(boolean show) {
+        this.showDisplacementArrows = show;
+        redraw();
+    }
     private Runnable onModelUpdate;
     public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
 
@@ -398,7 +411,13 @@ public class BeamCanvasView {
     public void redraw() {
         clear();
         GraphicsContext g = canvas.getGraphicsContext2D();
-        drawPolygonRegions(g);
+        
+        // If we have results, undeformed mesh should be faded or drawn differently
+        if (lastPlaneStressResult != null || lastResult != null || lastTrussResult != null) {
+            // Drawn within result-specific methods
+        } else {
+            drawPolygonRegions(g);
+        }
 
         // draw elements (undeformed black)
         for (Element e : model.getElements()) {
@@ -576,8 +595,12 @@ public class BeamCanvasView {
             }
         } else if (mode == Mode.PLACE_SUPPORT) {
             activeTool = new SupportTool();
+        } else if (mode == Mode.PLACE_EDGE_SUPPORT) {
+            activeTool = new EdgeSupportTool();
         } else if (mode == Mode.PLACE_LOAD) {
             activeTool = new LoadTool();
+        } else if (mode == Mode.PLACE_EDGE_LOAD) {
+            activeTool = new EdgeLoadTool();
         } else {
             activeTool = null;
         }
@@ -587,6 +610,11 @@ public class BeamCanvasView {
     public void setPlacingSupportType(Support.Type t) { this.placingSupportType = t; }
     public void setPlacingBeamMaterialId(int materialId) { this.placingBeamMaterialId = materialId; }
     public void setPlacingLoad(double fx, double fy) { this.placingFx = fx; this.placingFy = fy; }
+    public void setPlacingEdgeLoad(double wx, double wy, com.treble.feasimulation.model.DistributedLoad.Type type) {
+        this.placingWx = wx;
+        this.placingWy = wy;
+        this.placingDistributedLoadType = type;
+    }
 
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
         this.lastResult = r;
@@ -626,6 +654,20 @@ public class BeamCanvasView {
             if (es.vonMises > maxVonMises) maxVonMises = es.vonMises;
         }
 
+        Map<Integer, Integer> nodeIdToIndex = r.getNodeIdToIndex();
+        double[] displacements = r.getDisplacements();
+
+        // 1. Draw undeformed mesh (thin grey lines)
+        g.setStroke(Color.LIGHTGRAY);
+        g.setLineWidth(0.5);
+        for (com.treble.feasimulation.model.TriangularElement element : r.getElements()) {
+            Node[] nodes = element.getNodes();
+            double[] xs = {nodes[0].getX(), nodes[1].getX(), nodes[2].getX()};
+            double[] ys = {nodes[0].getY(), nodes[1].getY(), nodes[2].getY()};
+            g.strokePolygon(xs, ys, 3);
+        }
+
+        // 2. Draw deformed mesh (scaled, coloured)
         for (com.treble.feasimulation.model.TriangularElement element : r.getElements()) {
             com.treble.feasimulation.solver.PlaneStressResult.ElementStress stress = r.getElementStresses().stream()
                     .filter(s -> s.elementId == element.getId())
@@ -634,8 +676,22 @@ public class BeamCanvasView {
             if (stress == null) continue;
 
             Node[] nodes = element.getNodes();
-            double[] xs = {nodes[0].getX(), nodes[1].getX(), nodes[2].getX()};
-            double[] ys = {nodes[0].getY(), nodes[1].getY(), nodes[2].getY()};
+            double[] xs = new double[3];
+            double[] ys = new double[3];
+
+            for (int i = 0; i < 3; i++) {
+                Integer idx = nodeIdToIndex.get(nodes[i].getId());
+                if (idx == null) {
+                    // Fallback to undeformed if node not in result
+                    xs[i] = nodes[i].getX();
+                    ys[i] = nodes[i].getY();
+                } else {
+                    double ux = displacements[idx * 2];
+                    double uy = displacements[idx * 2 + 1];
+                    xs[i] = nodes[i].getX() + ux * lastScale;
+                    ys[i] = nodes[i].getY() + uy * lastScale;
+                }
+            }
 
             g.setFill(getHeatmapColor(stress.vonMises, 0, maxVonMises));
             g.fillPolygon(xs, ys, 3);
@@ -647,6 +703,80 @@ public class BeamCanvasView {
         }
 
         drawHeatmapLegend(g, 0, maxVonMises);
+
+        if (showDisplacementArrows) {
+            drawDisplacementArrows(g, nodeIdToIndex, displacements, lastScale);
+        }
+    }
+
+    private void drawDisplacementArrows(GraphicsContext g, Map<Integer, Integer> nodeIdToIndex, double[] displacements, double scale) {
+        g.setStroke(Color.ORANGE);
+        g.setLineWidth(1.5);
+        double arrowHeadSize = 5.0;
+
+        for (Node node : model.getNodes()) {
+            Integer idx = nodeIdToIndex.get(node.getId());
+            if (idx == null) continue;
+
+            double ux = displacements[idx * 2];
+            double uy = displacements[idx * 2 + 1];
+
+            double mag = Math.sqrt(ux * ux + uy * uy);
+            if (mag < 1e-12) continue;
+
+            double startX = node.getX();
+            double startY = node.getY();
+            double endX = startX + ux * scale;
+            double endY = startY + uy * scale;
+
+            // Draw arrow line
+            g.strokeLine(startX, startY, endX, endY);
+
+            // Draw arrow head
+            double angle = Math.atan2(endY - startY, endX - startX);
+            double x1 = endX - arrowHeadSize * Math.cos(angle - Math.PI / 6);
+            double y1 = endY - arrowHeadSize * Math.sin(angle - Math.PI / 6);
+            double x2 = endX - arrowHeadSize * Math.cos(angle + Math.PI / 6);
+            double y2 = endY - arrowHeadSize * Math.sin(angle + Math.PI / 6);
+
+            g.strokeLine(endX, endY, x1, y1);
+            g.strokeLine(endX, endY, x2, y2);
+        }
+    }
+
+    private void drawDisplacementArrowsForBeam(GraphicsContext g, Map<Integer, Integer> nodeIdToIndex, double[] displacements, double scale) {
+        g.setStroke(Color.ORANGE);
+        g.setLineWidth(1.5);
+        double arrowHeadSize = 5.0;
+
+        for (Node node : model.getNodes()) {
+            Integer idx = nodeIdToIndex.get(node.getId());
+            if (idx == null) continue;
+
+            double ux = displacements[idx * 3];
+            double uy = displacements[idx * 3 + 1];
+
+            double mag = Math.sqrt(ux * ux + uy * uy);
+            if (mag < 1e-12) continue;
+
+            double startX = node.getX();
+            double startY = node.getY();
+            double endX = startX + ux * scale;
+            double endY = startY + uy * scale;
+
+            // Draw arrow line
+            g.strokeLine(startX, startY, endX, endY);
+
+            // Draw arrow head
+            double angle = Math.atan2(endY - startY, endX - startX);
+            double x1 = endX - arrowHeadSize * Math.cos(angle - Math.PI / 6);
+            double y1 = endY - arrowHeadSize * Math.sin(angle - Math.PI / 6);
+            double x2 = endX - arrowHeadSize * Math.cos(angle + Math.PI / 6);
+            double y2 = endY - arrowHeadSize * Math.sin(angle + Math.PI / 6);
+
+            g.strokeLine(endX, endY, x1, y1);
+            g.strokeLine(endX, endY, x2, y2);
+        }
     }
 
     private Color getHeatmapColor(double value, double min, double max) {
@@ -752,6 +882,10 @@ public class BeamCanvasView {
         }
 
         drawTrussLegend(g, maxTensionForce, maxCompressionForce);
+
+        if (showDisplacementArrows) {
+            drawDisplacementArrows(g, nodeIndex, r.displacements, scale);
+        }
     }
 
     private Color getTrussColor(double force, double maxAbsForce) {
@@ -832,6 +966,13 @@ public class BeamCanvasView {
             double y2_def = nt.getY() + v2 * scale;
 
             g.strokeLine(x1_def, y1_def, x2_def, y2_def);
+        }
+
+        if (showDisplacementArrows) {
+            Map<Integer, Integer> nodeIdToIndex = new HashMap<>();
+            List<Node> nodes = model.getNodes();
+            for (int i = 0; i < nodes.size(); i++) nodeIdToIndex.put(nodes.get(i).getId(), i);
+            drawDisplacementArrowsForBeam(g, nodeIdToIndex, r.displacements, scale);
         }
     }
 
@@ -1153,14 +1294,16 @@ public class BeamCanvasView {
                 if (s.getPolygonId() == region.getId()) {
                     int i = s.getEdgeIndex();
                     int j = (i + 1) % n;
-                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.GREEN, "S");
+                    String label = s.getType() == Support.Type.FIXED ? "F" : (s.getType() == Support.Type.ROLLER ? "R" : "S");
+                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.GREEN, label);
                 }
             }
             for (com.treble.feasimulation.model.DistributedLoad l : model.getDistributedLoads()) {
                 if (l.getPolygonId() == region.getId()) {
                     int i = l.getEdgeIndex();
                     int j = (i + 1) % n;
-                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.ORANGERED, "W");
+                    String label = l.getType() == com.treble.feasimulation.model.DistributedLoad.Type.UNIFORM ? "Wn" : "W";
+                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.RED, label);
                 }
             }
 
@@ -1298,6 +1441,46 @@ public class BeamCanvasView {
             redraw();
             e.consume();
         }
+        @Override public void onDrag(Point2D p, MouseEvent e) {}
+        @Override public void onMove(Point2D p, MouseEvent e) {}
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+        @Override public void drawOverlay(GraphicsContext g) {}
+    }
+
+    private class EdgeSupportTool implements CanvasTool {
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            Optional<PolygonEdgeHit> hit = findNearestPolygonEdge(p, 10.0);
+            if (hit.isPresent()) {
+                PolygonEdgeHit edgeHit = hit.get();
+                int id = model.getEdgeSupports().size() + 1;
+                model.addEdgeSupport(new com.treble.feasimulation.model.EdgeSupport(
+                        id, edgeHit.polygonId, edgeHit.edgeIndex, placingSupportType));
+                notifyModelUpdate();
+                redraw();
+            }
+        }
+
+        @Override public void onDrag(Point2D p, MouseEvent e) {}
+        @Override public void onMove(Point2D p, MouseEvent e) {}
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+        @Override public void drawOverlay(GraphicsContext g) {}
+    }
+
+    private class EdgeLoadTool implements CanvasTool {
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            Optional<PolygonEdgeHit> hit = findNearestPolygonEdge(p, 10.0);
+            if (hit.isPresent()) {
+                PolygonEdgeHit edgeHit = hit.get();
+                int id = model.getDistributedLoads().size() + 1;
+                model.addDistributedLoad(new com.treble.feasimulation.model.DistributedLoad(
+                        id, edgeHit.polygonId, edgeHit.edgeIndex, placingWx, placingWy, placingDistributedLoadType));
+                notifyModelUpdate();
+                redraw();
+            }
+        }
+
         @Override public void onDrag(Point2D p, MouseEvent e) {}
         @Override public void onMove(Point2D p, MouseEvent e) {}
         @Override public void onRelease(Point2D p, MouseEvent e) {}

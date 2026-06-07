@@ -4,11 +4,17 @@ import com.treble.feasimulation.model.BeamElement;
 import com.treble.feasimulation.model.Element;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Material;
+import com.treble.feasimulation.model.MaterialLibrary;
 import com.treble.feasimulation.model.Node;
+import com.treble.feasimulation.model.PolygonRegion;
+import com.treble.feasimulation.model.TriangularElement;
 import com.treble.feasimulation.solver.BeamSolver;
+import com.treble.feasimulation.solver.PlaneStressResult;
 import com.treble.feasimulation.solver.TrussSolver;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Generates a plain-English explanation of beam solver results.
@@ -87,6 +93,11 @@ public class ResultExplanationService {
             summary.append(' ').append(failureNote);
         }
 
+        String materialNote = describeMaterialComparison(model);
+        if (!materialNote.isEmpty()) {
+            summary.append(" ").append(materialNote);
+        }
+
         return summary.toString();
     }
 
@@ -130,6 +141,105 @@ public class ResultExplanationService {
         String failureNote = describeTrussFailurePrediction(result, model);
         if (!failureNote.isEmpty()) {
             summary.append(" ").append(failureNote);
+        }
+
+        String materialNote = describeMaterialComparison(model);
+        if (!materialNote.isEmpty()) {
+            summary.append(" ").append(materialNote);
+        }
+
+        return summary.toString();
+    }
+
+    /**
+     * Produce a short plain-English explanation for plane-stress solver results.
+     */
+    public String explain(PlaneStressResult result, FEAData model) {
+        if (result == null || result.getElementStresses() == null || result.getElementStresses().isEmpty()) {
+            return "No plane-stress results to explain.";
+        }
+
+        PlaneStressResult.ElementStress worstEr = null;
+        double maxVonMises = -1.0;
+
+        for (PlaneStressResult.ElementStress er : result.getElementStresses()) {
+            if (er.vonMises > maxVonMises) {
+                maxVonMises = er.vonMises;
+                worstEr = er;
+            }
+        }
+
+        if (worstEr == null || maxVonMises < 1e-9) {
+            return "No significant stresses present in plane-stress results.";
+        }
+
+        StringBuilder summary = new StringBuilder();
+        summary.append(String.format("The highest stress is %.3e Pa (von Mises), found in triangular element %d.",
+                maxVonMises, worstEr.elementId));
+
+        // Find the triangle and its centroid
+        TriangularElement worstTri = null;
+        for (TriangularElement tri : result.getElements()) {
+            if (tri.getId() == worstEr.elementId) {
+                worstTri = tri;
+                break;
+            }
+        }
+
+        if (worstTri != null) {
+            Node[] nodes = worstTri.getNodes();
+            double cx = (nodes[0].getX() + nodes[1].getX() + nodes[2].getX()) / 3.0;
+            double cy = (nodes[0].getY() + nodes[1].getY() + nodes[2].getY()) / 3.0;
+
+            // Qualitative Explanations
+            List<String> insights = new ArrayList<>();
+
+            // 1. Sharp Corners detection
+            boolean nearCorner = false;
+            for (PolygonRegion region : model.getPolygonRegions()) {
+                List<PolygonRegion.Vertex> vertices = region.getVertices();
+                int n = vertices.size();
+                for (int i = 0; i < n; i++) {
+                    PolygonRegion.Vertex v = vertices.get(i);
+                    double dist = Math.hypot(v.x - cx, v.y - cy);
+                    if (dist < 20.0) { // Near a vertex (heuristic distance)
+                        insights.add("Stress often increases near sharp corners because the material must redistribute internal forces to follow the abrupt change in geometry.");
+                        nearCorner = true;
+                        break;
+                    }
+                }
+                if (nearCorner) break;
+            }
+
+            // 2. Load Paths
+            if (!model.getPointLoads().isEmpty() || !model.getDistributedLoads().isEmpty()) {
+                insights.add("High-stress regions typically form along 'load paths'—the most direct routes through the material from the applied loads to the supports.");
+            }
+
+            // 3. Holes/Stress Concentration (simplified)
+            // Since we don't have explicit holes in PolygonRegion yet (it's single loop),
+            // but we might have concave shapes.
+            
+            if (insights.isEmpty()) {
+                insights.add("This area is working the hardest to maintain the structure's shape under the current loading.");
+            }
+
+            summary.append(" ").append(insights.get(0));
+            
+            // Failure prediction
+            Material mat = findMaterialById(model, worstTri.getMaterialId());
+            if (mat != null && mat.getYieldStress() > 0) {
+                double utilization = maxVonMises / mat.getYieldStress();
+                double sf = 1.0 / utilization;
+                String state = utilization > 1.0 ? "likely to fail" : "unlikely to fail";
+                summary.append(String.format(" Compared to the material yield stress (%.3e Pa), this region is %s (Safety Factor = %.2f).",
+                        mat.getYieldStress(), state, sf));
+            }
+        }
+
+        String materialNote = describeMaterialComparison(model);
+        if (!materialNote.isEmpty()) {
+            summary.append(" ").append(materialNote);
         }
 
         return summary.toString();
@@ -287,5 +397,44 @@ public class ResultExplanationService {
             return "tension";
         }
         return "compression";
+    }
+
+    private String describeMaterialComparison(FEAData model) {
+        List<Material> materials = model.getMaterials();
+        if (materials.isEmpty()) return "";
+
+        Material current = materials.get(0);
+        Material steel = MaterialLibrary.getPresets().get(0); // Steel
+        Material wood = MaterialLibrary.getPresets().get(2); // Wood
+
+        StringBuilder comparison = new StringBuilder();
+
+        if (current.getName().equalsIgnoreCase("Steel")) {
+            comparison.append("Using steel provides high stiffness (resistance to bending). ");
+            comparison.append("If you switched to wood, the structure would deform much more because wood's Young's modulus is significantly lower.");
+        } else if (current.getName().equalsIgnoreCase("Aluminium")) {
+            comparison.append("Aluminium is lighter but less stiff than steel. ");
+            comparison.append(String.format("It will deform about %.1f times more than steel under the same load.", 
+                steel.getYoungsModulus() / current.getYoungsModulus()));
+        } else if (current.getName().equalsIgnoreCase("Wood")) {
+            comparison.append("Wood has a very low stiffness compared to metals. ");
+            comparison.append(String.format("Expect large deformations—about %d times more than steel!", 
+                (int)(steel.getYoungsModulus() / current.getYoungsModulus())));
+        } else {
+            // Generic comparison
+            double ratio = current.getYoungsModulus() / steel.getYoungsModulus();
+            if (ratio > 1.1) {
+                comparison.append("This custom material is even stiffer than steel, leading to very small deformations.");
+            } else if (ratio < 0.9) {
+                comparison.append(String.format("This material is less stiff than steel (%.1f%% of steel's stiffness), so it will deform more easily.", ratio * 100));
+            } else {
+                comparison.append("This material has a stiffness similar to steel.");
+            }
+        }
+
+        // Stress distribution note
+        comparison.append(" Note that while the amount of deformation depends on stiffness, the way stress is distributed throughout the geometry remains largely the same for most common materials; only the magnitudes and deformation scale change.");
+
+        return comparison.toString();
     }
 }

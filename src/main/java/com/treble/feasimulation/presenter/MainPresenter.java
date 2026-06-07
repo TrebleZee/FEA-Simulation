@@ -88,6 +88,29 @@ public class MainPresenter implements Presenter {
             }
         });
 
+        view.getPlaceEdgeSupportButton().setOnAction(e -> {
+            String sel = view.getSupportTypeChoice().getValue();
+            try {
+                com.treble.feasimulation.model.Support.Type t = com.treble.feasimulation.model.Support.Type.valueOf(sel);
+                canvasView.setPlacingSupportType(t);
+                canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.PLACE_EDGE_SUPPORT);
+            } catch (Exception ex) {
+                // ignore
+            }
+        });
+
+        view.getApplyEdgeLoadButton().setOnAction(e -> {
+            try {
+                double wx = Double.parseDouble(view.getLoadWxField().getText());
+                double wy = Double.parseDouble(view.getLoadWyField().getText());
+                com.treble.feasimulation.model.DistributedLoad.Type type = com.treble.feasimulation.model.DistributedLoad.Type.valueOf(view.getDistributedLoadTypeChoice().getValue());
+                canvasView.setPlacingEdgeLoad(wx, wy, type);
+                canvasView.setMode(com.treble.feasimulation.view.BeamCanvasView.Mode.PLACE_EDGE_LOAD);
+            } catch (NumberFormatException ex) {
+                showErrorDialog("Invalid Load", "Please enter numeric values for edge loads.");
+            }
+        });
+
         // Point load placement
         view.getApplyLoadButton().setOnAction(e -> {
             try {
@@ -125,6 +148,12 @@ public class MainPresenter implements Presenter {
         });
         view.getLoadFxField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
         view.getLoadFyField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
+        view.getDeformationScaleSlider().valueProperty().addListener((obs, oldV, newV) -> {
+            canvasView.setLastScale(newV.doubleValue());
+        });
+        view.getShowDisplacementArrowsCheckbox().selectedProperty().addListener((obs, oldV, newV) -> {
+            canvasView.setShowDisplacementArrows(newV);
+        });
 
         setupTables();
         refreshTables();
@@ -245,7 +274,7 @@ public class MainPresenter implements Presenter {
             SolverResult result = solver.solve(model);
 
             if (result instanceof TrussSolver.Result tr) {
-                double scale = 100.0;
+                double scale = view.getDeformationScaleSlider().getValue();
                 canvasView.showTrussResult(tr, scale);
                 updateTrussStressSummary(tr);
 
@@ -253,7 +282,7 @@ public class MainPresenter implements Presenter {
                 String explanation = expl.explain(tr, model);
                 view.getExplanationArea().setText(explanation);
             } else if (result instanceof BeamSolver.Result br) {
-                double scale = 100.0;
+                double scale = view.getDeformationScaleSlider().getValue();
                 canvasView.showResult(br, scale);
                 updateStressSummary(br);
 
@@ -261,12 +290,13 @@ public class MainPresenter implements Presenter {
                 String explanation = expl.explain(br, model);
                 view.getExplanationArea().setText(explanation);
             } else if (result instanceof com.treble.feasimulation.solver.PlaneStressResult psr) {
-                double scale = 1.0; // Use 1.0 for overlay on undeformed mesh
+                double scale = view.getDeformationScaleSlider().getValue();
                 canvasView.showPlaneStressResult(psr, scale);
                 updatePlaneStressSummary(psr);
 
-                view.getExplanationArea().setText("Plane Stress Analysis completed.\nHeatmap shows von Mises stress distribution.\nMax von Mises stress: " + 
-                    String.format("%.3e Pa", psr.getElementStresses().stream().mapToDouble(s -> s.vonMises).max().orElse(0)));
+                ResultExplanationService expl = new ResultExplanationService();
+                String explanation = expl.explain(psr, model);
+                view.getExplanationArea().setText(explanation);
             } else {
                 // PlaneStressSolver or other future solvers
                 view.getExplanationArea().setText("Results for " + result.getClass().getSimpleName() + " are not yet visually supported.");

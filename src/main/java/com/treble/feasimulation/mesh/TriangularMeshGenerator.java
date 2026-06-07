@@ -12,25 +12,46 @@ import java.util.List;
 public class TriangularMeshGenerator implements MeshGenerator {
     @Override
     public MeshResult generateMesh(PolygonRegion region, double density) {
-        // For a simple ear-clipping algorithm, density isn't easily applied 
-        // without adding Steiner points. For now, we'll keep the simple triangulation
-        // but the density parameter is available for future refinement (e.g., edge subdivision).
-        List<PolygonRegion.Vertex> vertices = new ArrayList<>(region.getVertices());
+        // Subdivide edges based on density
+        List<PolygonRegion.Vertex> originalVertices = region.getVertices();
+        List<PolygonRegion.Vertex> subdividedVertices = new ArrayList<>();
+        
+        // density parameter: target edge length (approx)
+        // Smaller density -> more subdivisions. 
+        // Let's interpret density as "approximate target edge length".
+        // If density <= 0, we'll use 1.0 or some default.
+        double targetLength = (density > 0) ? density : 50.0; 
+
+        for (int i = 0; i < originalVertices.size(); i++) {
+            PolygonRegion.Vertex v1 = originalVertices.get(i);
+            PolygonRegion.Vertex v2 = originalVertices.get((i + 1) % originalVertices.size());
+            
+            double dx = v2.x - v1.x;
+            double dy = v2.y - v1.y;
+            double L = Math.hypot(dx, dy);
+            
+            int numSegments = (int) Math.max(1, Math.ceil(L / targetLength));
+            for (int j = 0; j < numSegments; j++) {
+                double t = (double) j / numSegments;
+                subdividedVertices.add(new PolygonRegion.Vertex(v1.x + t * dx, v1.y + t * dy));
+            }
+        }
+
         List<Node> nodes = new ArrayList<>();
         List<TriangularElement> elements = new ArrayList<>();
 
         // Create nodes for each vertex
-        for (int i = 0; i < vertices.size(); i++) {
-            nodes.add(new Node(i + 1, vertices.get(i).x, vertices.get(i).y));
+        for (int i = 0; i < subdividedVertices.size(); i++) {
+            nodes.add(new Node(i + 1, subdividedVertices.get(i).x, subdividedVertices.get(i).y));
         }
 
-        if (vertices.size() < 3) {
+        if (subdividedVertices.size() < 3) {
             return new MeshResult(nodes, elements);
         }
 
         // We need to keep track of the original indices to map nodes to elements
         List<Integer> indexList = new ArrayList<>();
-        for (int i = 0; i < vertices.size(); i++) {
+        for (int i = 0; i < subdividedVertices.size(); i++) {
             indexList.add(i);
         }
 
@@ -42,7 +63,7 @@ public class TriangularMeshGenerator implements MeshGenerator {
                 int curr = indexList.get(i);
                 int next = indexList.get((i + 1) % indexList.size());
 
-                if (isEar(prev, curr, next, indexList, vertices)) {
+                if (isEar(prev, curr, next, indexList, subdividedVertices)) {
                     // Create element
                     elements.add(new TriangularElement(
                             elementIdCounter++,
@@ -50,7 +71,7 @@ public class TriangularMeshGenerator implements MeshGenerator {
                             nodes.get(curr),
                             nodes.get(next),
                             region.getMaterialId(),
-                            1.0 // Default thickness
+                            1.0 // Thickness will be updated by solver
                     ));
 
                     // Remove ear

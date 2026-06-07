@@ -12,6 +12,7 @@ import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.CheckBox;
 import javafx.geometry.Insets;
 
 import javafx.scene.control.Slider;
@@ -40,12 +41,19 @@ public class MainView {
     private final Button drawPolygonButton;
     private final Button trussModeButton;
     private final Button placeSupportButton;
+    private final Button placeEdgeSupportButton;
+    private final Button applyEdgeLoadButton;
+    private final ChoiceBox<String> distributedLoadTypeChoice;
+    private final TextField loadWxField;
+    private final TextField loadWyField;
     private final TextField loadFxField;
     private final TextField loadFyField;
     private final TextField youngsModulusField;
     private final TextField poissonRatioField;
     private final TextField thicknessField;
     private final Slider meshDensitySlider;
+    private final Slider deformationScaleSlider;
+    private final CheckBox showDisplacementArrowsCheckbox;
     private final Button applyLoadButton;
     private final Button updateLoadButton;
     private final Button runButton;
@@ -91,7 +99,15 @@ public class MainView {
         supportTypeChoice.getItems().addAll("FIXED", "PINNED", "ROLLER");
         supportTypeChoice.setValue("FIXED");
         placeSupportButton = new Button("Place Support (click node)");
+        placeEdgeSupportButton = new Button("Place Edge Support (click edge)");
 
+        distributedLoadTypeChoice = new ChoiceBox<>();
+        distributedLoadTypeChoice.getItems().addAll("DIRECTIONAL", "UNIFORM");
+        distributedLoadTypeChoice.setValue("DIRECTIONAL");
+        loadWxField = new TextField("0");
+        loadWyField = new TextField("-1000");
+        applyEdgeLoadButton = new Button("Apply Edge Load (click edge)");
+        
         beamMaterialChoice = new ChoiceBox<>();
         beamMaterialChoice.getItems().addAll(MaterialLibrary.getPresets());
         beamMaterialChoice.setValue(MaterialLibrary.getDefaultMaterial());
@@ -106,6 +122,16 @@ public class MainView {
         meshDensitySlider.setMajorTickUnit(2.0);
         meshDensitySlider.setMinorTickCount(5);
         meshDensitySlider.setBlockIncrement(0.5);
+
+        deformationScaleSlider = new Slider(0.0, 1000.0, 1.0);
+        deformationScaleSlider.setShowTickLabels(true);
+        deformationScaleSlider.setShowTickMarks(true);
+        deformationScaleSlider.setMajorTickUnit(200.0);
+        deformationScaleSlider.setMinorTickCount(5);
+        deformationScaleSlider.setBlockIncrement(10.0);
+        
+        showDisplacementArrowsCheckbox = new CheckBox("Show Displacement Arrows");
+        showDisplacementArrowsCheckbox.setSelected(false);
 
         loadFxField = new TextField("0");
         loadFyField = new TextField("-1000");
@@ -159,12 +185,18 @@ public class MainView {
 
         VBox side = new VBox(8,
                 new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, drawPolygonButton, trussModeButton,
-                new Label("Supports:"), supportTypeChoice, placeSupportButton,
+                new Label("Supports:"), supportTypeChoice, placeSupportButton, placeEdgeSupportButton,
                 new Label("Material:"), beamMaterialChoice,
                 new Label("Young's Modulus (Pa):"), youngsModulusField,
                 new Label("Poisson's Ratio:"), poissonRatioField,
                 new Label("Thickness (m):"), thicknessField,
                 new Label("Mesh Density (Coarse -> Fine):"), meshDensitySlider,
+                new Label("Deformation Scale:"), deformationScaleSlider,
+                showDisplacementArrowsCheckbox,
+                new Label("Distributed Edge Load Type:"), distributedLoadTypeChoice,
+                new Label("Edge Load Wx (normal):"), loadWxField,
+                new Label("Edge Load Wy (tangential):"), loadWyField,
+                applyEdgeLoadButton,
                 new Label("Point Load Fx:"), loadFxField,
                 new Label("Point Load Fy:"), loadFyField,
                 new Label("Click an element or node to place the load."), applyLoadButton, updateLoadButton,
@@ -203,12 +235,19 @@ public class MainView {
     public ChoiceBox<String> getSupportTypeChoice() { return supportTypeChoice; }
     public ChoiceBox<Material> getBeamMaterialChoice() { return beamMaterialChoice; }
     public Button getPlaceSupportButton() { return placeSupportButton; }
+    public Button getPlaceEdgeSupportButton() { return placeEdgeSupportButton; }
+    public Button getApplyEdgeLoadButton() { return applyEdgeLoadButton; }
+    public ChoiceBox<String> getDistributedLoadTypeChoice() { return distributedLoadTypeChoice; }
+    public TextField getLoadWxField() { return loadWxField; }
+    public TextField getLoadWyField() { return loadWyField; }
     public TextField getLoadFxField() { return loadFxField; }
     public TextField getLoadFyField() { return loadFyField; }
     public TextField getYoungsModulusField() { return youngsModulusField; }
     public TextField getPoissonRatioField() { return poissonRatioField; }
     public TextField getThicknessField() { return thicknessField; }
     public Slider getMeshDensitySlider() { return meshDensitySlider; }
+    public Slider getDeformationScaleSlider() { return deformationScaleSlider; }
+    public CheckBox getShowDisplacementArrowsCheckbox() { return showDisplacementArrowsCheckbox; }
     public Button getApplyLoadButton() { return applyLoadButton; }
     public Button getUpdateLoadButton() { return updateLoadButton; }
     public Button getRunButton() { return runButton; }
