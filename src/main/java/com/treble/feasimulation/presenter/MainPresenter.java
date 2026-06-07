@@ -63,6 +63,11 @@ public class MainPresenter implements Presenter {
             }
         });
 
+        view.getDrawPolygonButton().setOnAction(e -> {
+            canvasView.setMode(BeamCanvasView.Mode.POLYGON);
+            canvasView.setPlacingElementType(BeamCanvasView.ElementType.POLYGON);
+        });
+
         view.getTrussModeButton().setOnAction(e -> {
             canvasView.setMode(BeamCanvasView.Mode.DRAW);
             canvasView.setPlacingElementType(BeamCanvasView.ElementType.TRUSS);

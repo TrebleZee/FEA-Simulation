@@ -36,6 +36,7 @@ public class MainView {
     private final ChoiceBox<String> supportTypeChoice;
     private final ChoiceBox<Material> beamMaterialChoice;
     private final Button drawElementButton;
+    private final Button drawPolygonButton;
     private final Button trussModeButton;
     private final Button placeSupportButton;
     private final TextField loadFxField;
@@ -76,6 +77,7 @@ public class MainView {
         elementTypeChoice.getItems().addAll("Beam", "Truss Member", "Polygon");
         elementTypeChoice.setValue("Beam");
         drawElementButton = new Button("Draw Elements");
+        drawPolygonButton = new Button("Draw Polygons");
         trussModeButton = new Button("Truss Mode");
 
         supportTypeChoice = new ChoiceBox<>();
@@ -136,7 +138,7 @@ public class MainView {
         explanationArea.setPromptText("Result explanation will appear here.");
 
         VBox side = new VBox(8,
-                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, trussModeButton,
+                new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, drawPolygonButton, trussModeButton,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Material:"), beamMaterialChoice,
                 new Label("Poisson's Ratio:"), poissonRatioField,
@@ -169,6 +171,7 @@ public class MainView {
     // Side panel getters
     public ChoiceBox<String> getElementTypeChoice() { return elementTypeChoice; }
     public Button getDrawElementButton() { return drawElementButton; }
+    public Button getDrawPolygonButton() { return drawPolygonButton; }
     public Button getTrussModeButton() { return trussModeButton; }
     public ChoiceBox<String> getSupportTypeChoice() { return supportTypeChoice; }
     public ChoiceBox<Material> getBeamMaterialChoice() { return beamMaterialChoice; }
