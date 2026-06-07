@@ -9,6 +9,7 @@ import com.treble.feasimulation.model.TrussNode;
 import com.treble.feasimulation.model.FEAData;
 import com.treble.feasimulation.model.Node;
 import com.treble.feasimulation.model.MaterialLibrary;
+import com.treble.feasimulation.model.Material;
 import javafx.application.Platform;
 import javafx.geometry.Point2D;
 import javafx.scene.canvas.Canvas;
@@ -136,6 +137,22 @@ public class BeamCanvasView {
         this.showDisplacementArrows = show;
         redraw();
     }
+    // Layer visibility toggles
+    private boolean showNodes = true;
+    private boolean showSupports = true;
+    private boolean showLoads = true;
+    private boolean showMesh = true;
+    private boolean showStress = true;
+    private boolean showDeformation = true;
+    private boolean showReactions = true;
+
+    public void setShowNodes(boolean v) { this.showNodes = v; redraw(); }
+    public void setShowSupports(boolean v) { this.showSupports = v; redraw(); }
+    public void setShowLoads(boolean v) { this.showLoads = v; redraw(); }
+    public void setShowMesh(boolean v) { this.showMesh = v; redraw(); }
+    public void setShowStress(boolean v) { this.showStress = v; redraw(); }
+    public void setShowDeformation(boolean v) { this.showDeformation = v; redraw(); }
+    public void setShowReactions(boolean v) { this.showReactions = v; redraw(); }
     private Runnable onModelUpdate;
     public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
 
@@ -416,42 +433,50 @@ public class BeamCanvasView {
         if (lastPlaneStressResult != null || lastResult != null || lastTrussResult != null) {
             // Drawn within result-specific methods
         } else {
-            drawPolygonRegions(g);
-        }
-
-        // draw elements (undeformed black)
-        for (Element e : model.getElements()) {
-            Optional<Node> s = model.findNodeById(e.getNodeStartId());
-            Optional<Node> t = model.findNodeById(e.getNodeEndId());
-            if (s.isPresent() && t.isPresent()) {
-                Node ns = s.get(); Node nt = t.get();
-                if (hoverElementId != null && hoverElementId == e.getId()) {
-                    g.setStroke(Color.ORANGE);
-                    g.setLineWidth(3);
-                } else {
-                    Color base = e instanceof TrussElement ? Color.GRAY : Color.BLACK;
-                    if (lastTrussResult != null || lastResult != null) {
-                        g.setStroke(Color.color(base.getRed(), base.getGreen(), base.getBlue(), 0.2));
-                    } else {
-                        g.setStroke(base);
-                    }
-                    g.setLineWidth(2);
-                }
-                g.strokeLine(ns.getX(), ns.getY(), nt.getX(), nt.getY());
-                // draw id label
-                double mx = (ns.getX() + nt.getX()) / 2.0;
-                double my = (ns.getY() + nt.getY()) / 2.0;
-                g.setFill(lastTrussResult != null || lastResult != null ? Color.color(0, 0, 1, 0.2) : Color.BLUE);
-                g.fillText((e instanceof TrussElement ? "T" : "E") + e.getId(), mx + 4, my - 4);
+            if (showMesh) {
+                drawPolygonRegions(g);
             }
         }
 
-        // if we have results, draw deformed shape and moment diagram
+        // draw elements (undeformed black)
+        if (showMesh) {
+            for (Element e : model.getElements()) {
+                Optional<Node> s = model.findNodeById(e.getNodeStartId());
+                Optional<Node> t = model.findNodeById(e.getNodeEndId());
+                if (s.isPresent() && t.isPresent()) {
+                    Node ns = s.get(); Node nt = t.get();
+                    if (hoverElementId != null && hoverElementId == e.getId()) {
+                        g.setStroke(Color.ORANGE);
+                        g.setLineWidth(3);
+                    } else {
+                        Color base = e instanceof TrussElement ? Color.GRAY : Color.BLACK;
+                        if (lastTrussResult != null || lastResult != null) {
+                            g.setStroke(Color.color(base.getRed(), base.getGreen(), base.getBlue(), 0.2));
+                        } else {
+                            g.setStroke(base);
+                        }
+                        g.setLineWidth(2);
+                    }
+                    g.strokeLine(ns.getX(), ns.getY(), nt.getX(), nt.getY());
+                    // draw id label
+                    double mx = (ns.getX() + nt.getX()) / 2.0;
+                    double my = (ns.getY() + nt.getY()) / 2.0;
+                    g.setFill(lastTrussResult != null || lastResult != null ? Color.color(0, 0, 1, 0.2) : Color.BLUE);
+                    g.fillText((e instanceof TrussElement ? "T" : "E") + e.getId(), mx + 4, my - 4);
+                }
+            }
+        }
+
+        // if we have results, draw deformed shape and diagrams
         if (lastResult != null) {
-            drawMomentDiagram(g, lastResult);
-            drawDeformedShape(g, lastResult, lastScale);
+            if (showStress) {
+                drawShearDiagram(g, lastResult);
+                drawMomentDiagram(g, lastResult);
+            }
+            if (showDeformation) drawDeformedShape(g, lastResult, lastScale);
+            if (showReactions) drawSupportReactions(g, lastResult);
         } else if (lastTrussResult != null) {
-            drawTrussResult(g, lastTrussResult, lastScale);
+            if (showDeformation) drawTrussResult(g, lastTrussResult, lastScale);
         } else if (lastPlaneStressResult != null) {
             drawPlaneStressResult(g, lastPlaneStressResult);
         }
@@ -461,51 +486,57 @@ public class BeamCanvasView {
         }
 
         // draw nodes
-        if (lastTrussResult == null && lastResult == null && lastPlaneStressResult == null) {
-            g.setFill(Color.RED);
-            for (Node n : model.getNodes()) {
-                g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
-            }
-        } else {
-            // draw original nodes faint
-            g.setFill(Color.color(1, 0, 0, 0.3));
-            for (Node n : model.getNodes()) {
-                g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+        if (showNodes) {
+            if (lastTrussResult == null && lastResult == null && lastPlaneStressResult == null) {
+                g.setFill(Color.RED);
+                for (Node n : model.getNodes()) {
+                    g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+                }
+            } else {
+                // draw original nodes faint
+                g.setFill(Color.color(1, 0, 0, 0.3));
+                for (Node n : model.getNodes()) {
+                    g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+                }
             }
         }
 
         // draw supports
-        g.setFill(Color.DARKGREEN);
-        for (Support s : model.getSupports()) {
-            model.findNodeById(s.getNodeId()).ifPresent(n -> {
-                double x = n.getX(); double y = n.getY();
-                switch (s.getType() == null ? Support.Type.PINNED : s.getType()) {
-                    case FIXED:
-                        g.fillRect(x-6, y+6, 12, 6);
-                        break;
-                    case PINNED:
-                        g.fillOval(x-6, y+6, 12, 6);
-                        break;
-                    case ROLLER:
-                        g.strokeOval(x-8, y+6, 16, 6);
-                        break;
-                }
-            });
+        if (showSupports) {
+            g.setFill(Color.DARKGREEN);
+            for (Support s : model.getSupports()) {
+                model.findNodeById(s.getNodeId()).ifPresent(n -> {
+                    double x = n.getX(); double y = n.getY();
+                    switch (s.getType() == null ? Support.Type.PINNED : s.getType()) {
+                        case FIXED:
+                            g.fillRect(x-6, y+6, 12, 6);
+                            break;
+                        case PINNED:
+                            g.fillOval(x-6, y+6, 12, 6);
+                            break;
+                        case ROLLER:
+                            g.strokeOval(x-8, y+6, 16, 6);
+                            break;
+                    }
+                });
+            }
         }
 
         // draw point loads
-        g.setStroke(Color.MAGENTA);
-        for (PointLoad pl : model.getPointLoads()) {
-            model.findNodeById(pl.getNodeId()).ifPresent(n -> {
-                double x = n.getX(); double y = n.getY();
-                double len = 20;
-                // derive arrow direction from fx,fy
-                double fx = pl.getFx(); double fy = pl.getFy();
-                double ang = Math.atan2(-fy, fx); // invert fy for screen
-                double x2 = x + len * Math.cos(ang);
-                double y2 = y - len * Math.sin(ang);
-                g.strokeLine(x, y, x2, y2);
-            });
+        if (showLoads) {
+            g.setStroke(Color.MAGENTA);
+            for (PointLoad pl : model.getPointLoads()) {
+                model.findNodeById(pl.getNodeId()).ifPresent(n -> {
+                    double x = n.getX(); double y = n.getY();
+                    double len = 20;
+                    // derive arrow direction from fx,fy
+                    double fx = pl.getFx(); double fy = pl.getFy();
+                    double ang = Math.atan2(-fy, fx); // invert fy for screen
+                    double x2 = x + len * Math.cos(ang);
+                    double y2 = y - len * Math.sin(ang);
+                    g.strokeLine(x, y, x2, y2);
+                });
+            }
         }
 
         // draw tool overlay last
@@ -658,13 +689,15 @@ public class BeamCanvasView {
         double[] displacements = r.getDisplacements();
 
         // 1. Draw undeformed mesh (thin grey lines)
-        g.setStroke(Color.LIGHTGRAY);
-        g.setLineWidth(0.5);
-        for (com.treble.feasimulation.model.TriangularElement element : r.getElements()) {
-            Node[] nodes = element.getNodes();
-            double[] xs = {nodes[0].getX(), nodes[1].getX(), nodes[2].getX()};
-            double[] ys = {nodes[0].getY(), nodes[1].getY(), nodes[2].getY()};
-            g.strokePolygon(xs, ys, 3);
+        if (showMesh) {
+            g.setStroke(Color.LIGHTGRAY);
+            g.setLineWidth(0.5);
+            for (com.treble.feasimulation.model.TriangularElement element : r.getElements()) {
+                Node[] nodes = element.getNodes();
+                double[] xs = {nodes[0].getX(), nodes[1].getX(), nodes[2].getX()};
+                double[] ys = {nodes[0].getY(), nodes[1].getY(), nodes[2].getY()};
+                g.strokePolygon(xs, ys, 3);
+            }
         }
 
         // 2. Draw deformed mesh (scaled, coloured)
@@ -681,8 +714,8 @@ public class BeamCanvasView {
 
             for (int i = 0; i < 3; i++) {
                 Integer idx = nodeIdToIndex.get(nodes[i].getId());
-                if (idx == null) {
-                    // Fallback to undeformed if node not in result
+                if (!showDeformation || idx == null) {
+                    // Undeformed
                     xs[i] = nodes[i].getX();
                     ys[i] = nodes[i].getY();
                 } else {
@@ -693,16 +726,22 @@ public class BeamCanvasView {
                 }
             }
 
-            g.setFill(getHeatmapColor(stress.vonMises, 0, maxVonMises));
-            g.fillPolygon(xs, ys, 3);
+            if (showStress) {
+                g.setFill(getHeatmapColor(stress.vonMises, 0, maxVonMises));
+                g.fillPolygon(xs, ys, 3);
+            }
 
-            // Draw element edges
-            g.setStroke(Color.color(0, 0, 0, 0.1));
-            g.setLineWidth(0.5);
-            g.strokePolygon(xs, ys, 3);
+            // Draw element edges (always draw borders faintly when mesh visible or deformation visible)
+            if (showMesh || showDeformation) {
+                g.setStroke(Color.color(0, 0, 0, 0.1));
+                g.setLineWidth(0.5);
+                g.strokePolygon(xs, ys, 3);
+            }
         }
 
-        drawHeatmapLegend(g, 0, maxVonMises);
+        if (showStress) {
+            drawHeatmapLegend(g, 0, maxVonMises);
+        }
 
         if (showDisplacementArrows) {
             drawDisplacementArrows(g, nodeIdToIndex, displacements, lastScale);
@@ -782,15 +821,25 @@ public class BeamCanvasView {
     private Color getHeatmapColor(double value, double min, double max) {
         if (max - min < 1e-9) return Color.BLUE;
         double ratio = (value - min) / (max - min);
+        if (ratio < 0) ratio = 0;
+        if (ratio > 1) ratio = 1;
 
-        // Blue (0) -> Green (0.5) -> Red (1.0)
-        if (ratio < 0.5) {
-            double localRatio = ratio * 2.0; // 0 to 1
-            return Color.BLUE.interpolate(Color.GREEN, localRatio);
-        } else {
-            double localRatio = (ratio - 0.5) * 2.0; // 0 to 1
-            return Color.GREEN.interpolate(Color.RED, localRatio);
-        }
+        // Perceptually ordered 6-stop palette: Blue → Cyan → Green → Yellow → Orange → Red
+        Color[] stops = new Color[]{
+                Color.BLUE,
+                Color.CYAN,
+                Color.GREEN,
+                Color.YELLOW,
+                Color.ORANGE,
+                Color.RED
+        };
+
+        int bands = stops.length - 1; // 5 segments
+        double scaled = ratio * bands;
+        int idx = (int) Math.floor(scaled);
+        if (idx >= bands) idx = bands - 1; // clamp upper edge
+        double t = scaled - idx; // local interpolation [0,1]
+        return stops[idx].interpolate(stops[idx + 1], t);
     }
 
     private void drawHeatmapLegend(GraphicsContext g, double min, double max) {
@@ -801,12 +850,12 @@ public class BeamCanvasView {
 
         g.setFill(Color.color(1, 1, 1, 0.85));
         g.fillRect(x, y, w, h);
-        g.setStroke(Color.BLACK);
+        g.setStroke(Color.web("#475569")); // Secondary
         g.setLineWidth(1);
         g.strokeRect(x, y, w, h);
 
-        g.setFill(Color.BLACK);
-        g.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 12));
+        g.setFill(Color.web("#475569"));
+        g.setFont(javafx.scene.text.Font.font("Inter", javafx.scene.text.FontWeight.SEMI_BOLD, 14));
         g.fillText("Von Mises Stress (Pa)", x + 10, y + 20);
 
         double barX = x + 10;
@@ -820,12 +869,12 @@ public class BeamCanvasView {
             g.setStroke(getHeatmapColor(val, min, max));
             g.strokeLine(barX, barY + i, barX + barW, barY + i);
         }
-        g.setStroke(Color.BLACK);
+        g.setStroke(Color.web("#475569"));
         g.strokeRect(barX, barY, barW, barH);
 
         // Labels
-        g.setFill(Color.BLACK);
-        g.setFont(javafx.scene.text.Font.font("System", 11));
+        g.setFill(Color.web("#475569"));
+        g.setFont(javafx.scene.text.Font.font("JetBrains Mono", 14));
         g.fillText(String.format("%.2e", max), barX + barW + 5, barY + 10);
         g.fillText(String.format("%.2e", (max + min) / 2), barX + barW + 5, barY + barH / 2 + 5);
         g.fillText(String.format("%.2e", min), barX + barW + 5, barY + barH);
@@ -939,33 +988,65 @@ public class BeamCanvasView {
     }
 
     private void drawDeformedShape(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
-        // draw deformed shape in blue
+        // Smooth cubic Hermite interpolation using beam shape functions for transverse deflection
         g.setStroke(Color.CORNFLOWERBLUE);
         g.setLineWidth(2);
+
+        List<Node> allNodes = model.getNodes();
         for (Element e : model.getElements()) {
-            java.util.Optional<Node> s = model.findNodeById(e.getNodeStartId());
-            java.util.Optional<Node> t = model.findNodeById(e.getNodeEndId());
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isEmpty() || t.isEmpty()) continue;
             Node ns = s.get(); Node nt = t.get();
+
             int si = -1, ti = -1;
-            java.util.List<Node> nodes = model.getNodes();
-            for (int i = 0; i < nodes.size(); i++) {
-                if (nodes.get(i).getId() == ns.getId()) si = i;
-                if (nodes.get(i).getId() == nt.getId()) ti = i;
+            for (int i = 0; i < allNodes.size(); i++) {
+                if (allNodes.get(i).getId() == ns.getId()) si = i;
+                if (allNodes.get(i).getId() == nt.getId()) ti = i;
             }
             if (si < 0 || ti < 0) continue;
+
+            double x1 = ns.getX(), y1 = ns.getY();
+            double x2 = nt.getX(), y2 = nt.getY();
+            double dx = x2 - x1, dy = y2 - y1;
+            double L = Math.hypot(dx, dy);
+            if (L < 1e-9) continue;
+            double tx = dx / L, ty = dy / L; // tangent
+            double nx = -ty, ny = tx;        // normal
+
+            // Local DOF order: [u1, v1, θ1, u2, v2, θ2]
             double u1 = r.displacements[3*si];
             double v1 = r.displacements[3*si + 1];
+            double th1 = r.displacements[3*si + 2];
             double u2 = r.displacements[3*ti];
             double v2 = r.displacements[3*ti + 1];
+            double th2 = r.displacements[3*ti + 2];
 
-            // screen y increases down. Displacements are already in screen orientation-consistent values
-            double x1_def = ns.getX() + u1 * scale;
-            double y1_def = ns.getY() + v1 * scale;
-            double x2_def = nt.getX() + u2 * scale;
-            double y2_def = nt.getY() + v2 * scale;
+            // Sampling resolution adaptive to length
+            int samples = Math.max(8, (int)Math.round(L / 20.0));
+            double prevX = Double.NaN, prevY = Double.NaN;
+            for (int i = 0; i <= samples; i++) {
+                double sPar = (double)i / samples; // 0..1
+                // Beam shape functions for transverse v(s)
+                double N1 = 1 - 3*sPar*sPar + 2*sPar*sPar*sPar;
+                double N2 = sPar - 2*sPar*sPar + sPar*sPar*sPar;
+                double N3 = 3*sPar*sPar - 2*sPar*sPar*sPar;
+                double N4 = -sPar*sPar + sPar*sPar*sPar;
+                double v = N1*v1 + N2*L*th1 + N3*v2 + N4*L*th2;
 
-            g.strokeLine(x1_def, y1_def, x2_def, y2_def);
+                // Linear axial interpolation (optional small effect visually)
+                double u = (1 - sPar) * u1 + sPar * u2;
+
+                double bx = x1 + tx * (sPar * L + u * scale);
+                double by = y1 + ty * (sPar * L + u * scale);
+                double px = bx + nx * (v * scale);
+                double py = by + ny * (v * scale);
+
+                if (i > 0) {
+                    g.strokeLine(prevX, prevY, px, py);
+                }
+                prevX = px; prevY = py;
+            }
         }
 
         if (showDisplacementArrows) {
@@ -977,7 +1058,7 @@ public class BeamCanvasView {
     }
 
     private void drawMomentDiagram(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r) {
-        // map absolute moment to color ramp (blue -> white -> red)
+        // Auto-scale so the diagram height uses ~25% of canvas height
         double maxM = 0.0;
         for (com.treble.feasimulation.solver.BeamSolver.ElementResult er : r.elementResults) {
             maxM = Math.max(maxM, Math.abs(er.endMomentStart));
@@ -985,10 +1066,13 @@ public class BeamCanvasView {
         }
         if (maxM < 1e-12) return;
 
-        int samples = 12;
+        double targetHeight = canvas.getHeight() * 0.25; // 25% of canvas height
+        double diagramScale = targetHeight / maxM;
+
+        int samples = 16;
         for (Element e : model.getElements()) {
-            java.util.Optional<Node> s = model.findNodeById(e.getNodeStartId());
-            java.util.Optional<Node> t = model.findNodeById(e.getNodeEndId());
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
             if (s.isEmpty() || t.isEmpty()) continue;
             Node ns = s.get(); Node nt = t.get();
             // find element result by id
@@ -1004,12 +1088,10 @@ public class BeamCanvasView {
             double nx = -dy / L;
             double ny = dx / L;
 
-            double diagramScale = 0.05; // pixels per N*m, heuristic
-
             for (int i = 0; i < samples; i++) {
                 double t0 = (double)i / samples;
                 double t1 = (double)(i+1) / samples;
-                
+
                 double m0 = m1 + (m2 - m1)*t0;
                 double m1v = m1 + (m2 - m1)*t1;
 
@@ -1017,21 +1099,197 @@ public class BeamCanvasView {
                 double y0 = ns.getY() + dy*t0 + ny * m0 * diagramScale;
                 double x1 = ns.getX() + dx*t1 + nx * m1v * diagramScale;
                 double y1 = ns.getY() + dy*t1 + ny * m1v * diagramScale;
-                
+
                 double mv = 0.5*(m0 + m1v);
                 Color c = colorForMoment(mv, maxM);
                 g.setStroke(c);
                 g.setLineWidth(2);
                 g.strokeLine(x0, y0, x1, y1);
-                
-                // optional: draw connecting lines to base element
+
                 if (i == 0 || i == samples - 1) {
                     g.setLineWidth(1);
-                    g.setStroke(Color.LIGHTGRAY);
-                    g.strokeLine(ns.getX() + dx * (i == 0 ? 0 : 1), ns.getY() + dy * (i == 0 ? 0 : 1), 
+                    g.setStroke(Color.color(0,0,0,0.25));
+                    g.strokeLine(ns.getX() + dx * (i == 0 ? 0 : 1), ns.getY() + dy * (i == 0 ? 0 : 1),
                                  (i == 0 ? x0 : x1), (i == 0 ? y0 : y1));
                 }
             }
+        }
+    }
+
+    private void drawShearDiagram(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r) {
+        // Compute shear at element ends from local internal forces felocal[1], felocal[4]
+        // First pass: find global max |V|
+        double maxV = 0.0;
+        class EV { int id; double v1; double v2; EV(int id,double v1,double v2){this.id=id;this.v1=v1;this.v2=v2;} }
+        java.util.Map<Integer, EV> shearByElement = new java.util.HashMap<>();
+
+        for (Element e : model.getElements()) {
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
+            if (s.isEmpty() || t.isEmpty()) continue;
+            Node ns = s.get(); Node nt = t.get();
+            double dx = nt.getX() - ns.getX();
+            double dy = nt.getY() - ns.getY();
+            double L = Math.hypot(dx, dy);
+            if (L < 1e-9) continue;
+
+            // Retrieve element material props
+            double E = 0.0, A = 0.0, I = 0.0;
+            if (e instanceof com.treble.feasimulation.model.BeamElement be) {
+                E = resolveE(be);
+                A = be.getArea();
+                I = be.getInertia();
+            } else if (e instanceof com.treble.feasimulation.model.TrussElement te) {
+                E = resolveE(te);
+                A = te.getArea();
+                I = 0.0;
+            }
+
+            int si = indexOfNodeId(ns.getId());
+            int ti = indexOfNodeId(nt.getId());
+            if (si < 0 || ti < 0) continue;
+
+            // Local stiffness ke (6x6)
+            double[][] ke = new double[6][6];
+            double kax = (E * A) / L;
+            ke[0][0] = kax; ke[0][3] = -kax; ke[3][0] = -kax; ke[3][3] = kax;
+            if (I > 0) {
+                double coef = E * I / (L * L * L);
+                double[][] kb = new double[4][4];
+                kb[0][0] = 12.0 * coef; kb[0][1] = 6.0 * L * coef; kb[0][2] = -12.0 * coef; kb[0][3] = 6.0 * L * coef;
+                kb[1][0] = 6.0 * L * coef; kb[1][1] = 4.0 * L * L * coef; kb[1][2] = -6.0 * L * coef; kb[1][3] = 2.0 * L * L * coef;
+                kb[2][0] = -12.0 * coef; kb[2][1] = -6.0 * L * coef; kb[2][2] = 12.0 * coef; kb[2][3] = -6.0 * L * coef;
+                kb[3][0] = 6.0 * L * coef; kb[3][1] = 2.0 * L * L * coef; kb[3][2] = -6.0 * L * coef; kb[3][3] = 4.0 * L * L * coef;
+                int[] bIdx = new int[]{1,2,4,5};
+                for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) ke[bIdx[a]][bIdx[b]] = kb[a][b];
+            }
+
+            // Transformation T (local -> global)
+            double c = dx / L, sgn = dy / L;
+            double[][] T = new double[6][6];
+            T[0][0] = c; T[0][1] = -sgn; T[0][2] = 0; T[1][0] = sgn; T[1][1] = c; T[1][2] = 0; T[2][2] = 1;
+            T[3][3] = c; T[3][4] = -sgn; T[3][5] = 0; T[4][3] = sgn; T[4][4] = c; T[4][5] = 0; T[5][5] = 1;
+
+            // u_global for this element
+            double[] ug = new double[]{ r.displacements[3*si], r.displacements[3*si+1], r.displacements[3*si+2],
+                                        r.displacements[3*ti], r.displacements[3*ti+1], r.displacements[3*ti+2] };
+            // u_local = T^T * u_global
+            double[] ul = new double[6];
+            for (int ii = 0; ii < 6; ii++) {
+                double sum = 0.0; for (int jj = 0; jj < 6; jj++) sum += T[jj][ii] * ug[jj];
+                ul[ii] = sum;
+            }
+            // f_local = ke * u_local
+            double[] fl = new double[6];
+            for (int ii = 0; ii < 6; ii++) {
+                double sum = 0.0; for (int jj = 0; jj < 6; jj++) sum += ke[ii][jj] * ul[jj];
+                fl[ii] = sum;
+            }
+            double V1 = (I > 0) ? fl[1] : 0.0; // shear at start
+            double V2 = (I > 0) ? fl[4] : 0.0; // shear at end
+            shearByElement.put(e.getId(), new EV(e.getId(), V1, V2));
+            maxV = Math.max(maxV, Math.max(Math.abs(V1), Math.abs(V2)));
+        }
+
+        if (maxV < 1e-12) return;
+        double targetHeight = canvas.getHeight() * 0.25; // 25%
+        double scale = targetHeight / maxV;
+
+        // Draw
+        for (Element e : model.getElements()) {
+            EV ev = shearByElement.get(e.getId());
+            if (ev == null) continue;
+            Optional<Node> s = model.findNodeById(e.getNodeStartId());
+            Optional<Node> t = model.findNodeById(e.getNodeEndId());
+            if (s.isEmpty() || t.isEmpty()) continue;
+            Node ns = s.get(); Node nt = t.get();
+            double dx = nt.getX() - ns.getX();
+            double dy = nt.getY() - ns.getY();
+            double L = Math.hypot(dx, dy);
+            if (L < 1e-9) continue;
+            double nx = -dy / L, ny = dx / L;
+
+            int samples = 4;
+            for (int i = 0; i < samples; i++) {
+                double t0 = (double)i / samples;
+                double t1 = (double)(i+1) / samples;
+                double v0 = ev.v1 + (ev.v2 - ev.v1) * t0;
+                double v1 = ev.v1 + (ev.v2 - ev.v1) * t1;
+                double x0 = ns.getX() + dx * t0 + nx * v0 * scale;
+                double y0 = ns.getY() + dy * t0 + ny * v0 * scale;
+                double x1 = ns.getX() + dx * t1 + nx * v1 * scale;
+                double y1 = ns.getY() + dy * t1 + ny * v1 * scale;
+
+                g.setStroke(Color.color(0.2, 0.6, 0.2, 0.9)); // green-ish for shear
+                g.setLineWidth(2);
+                g.strokeLine(x0, y0, x1, y1);
+
+                if (i == 0 || i == samples - 1) {
+                    g.setLineWidth(1);
+                    g.setStroke(Color.color(0,0,0,0.25));
+                    g.strokeLine(ns.getX() + dx * (i == 0 ? 0 : 1), ns.getY() + dy * (i == 0 ? 0 : 1),
+                                 (i == 0 ? x0 : x1), (i == 0 ? y0 : y1));
+                }
+            }
+        }
+    }
+
+    private int indexOfNodeId(int nodeId) {
+        List<Node> nodes = model.getNodes();
+        for (int i = 0; i < nodes.size(); i++) if (nodes.get(i).getId() == nodeId) return i;
+        return -1;
+    }
+
+    private double resolveE(com.treble.feasimulation.model.Element e) {
+        int mid = e.getMaterialId();
+        for (Material m : model.getMaterials()) {
+            if (m.getId() == mid) return m.getYoungsModulus();
+        }
+        return MaterialLibrary.getDefaultMaterial().getYoungsModulus();
+    }
+
+    private void drawSupportReactions(GraphicsContext g, SolverResult res) {
+        java.util.List<com.treble.feasimulation.solver.ReactionForce> reactions = res.getSupportReactions();
+        if (reactions == null || reactions.isEmpty()) return;
+        // Find max magnitude for scaling
+        double maxMag = 0.0;
+        for (var r : reactions) {
+            double mag = Math.hypot(r.getFx(), r.getFy());
+            if (mag > maxMag) maxMag = mag;
+        }
+        if (maxMag <= 0) maxMag = 1.0;
+        double maxLen = 40.0; // px
+        double k = maxLen / maxMag;
+
+        g.setStroke(Color.DARKRED);
+        g.setLineWidth(2);
+        for (var rf : reactions) {
+            Optional<Node> nn = model.findNodeById(rf.getNodeId());
+            if (nn.isEmpty()) continue;
+            Node n = nn.get();
+            double x = n.getX();
+            double y = n.getY();
+            double vx = rf.getFx();
+            double vy = -rf.getFy(); // invert Y for screen coords
+            double len = Math.hypot(vx, vy);
+            if (len < 1e-12) continue;
+            double ux = vx / len, uy = vy / len;
+            double x2 = x + ux * (len * k);
+            double y2 = y + uy * (len * k);
+            g.strokeLine(x, y, x2, y2);
+            // arrow head
+            double ah = 6.0;
+            double ang = Math.atan2(uy, ux);
+            double leftX = x2 - ah * Math.cos(ang - Math.PI/6);
+            double leftY = y2 - ah * Math.sin(ang - Math.PI/6);
+            double rightX = x2 - ah * Math.cos(ang + Math.PI/6);
+            double rightY = y2 - ah * Math.sin(ang + Math.PI/6);
+            g.strokeLine(x2, y2, leftX, leftY);
+            g.strokeLine(x2, y2, rightX, rightY);
+
+            // label value (JetBrains Mono via CSS on canvas is not possible; rely on global font)
+            g.setFill(Color.DARKRED);
+            g.fillText(String.format("Fx=%.2e, Fy=%.2e", rf.getFx(), rf.getFy()), x2 + 4, y2 - 4);
         }
     }
 

@@ -21,9 +21,14 @@ public class SolverFactory {
      */
     public static FEASolver getSolver(FEAData data) {
         List<Element> elements = data.getElements();
-        
+
+        // If polygon regions are present, select the continuum plane-stress solver
+        if (!data.getPolygonRegions().isEmpty()) {
+            return new PlaneStressSolver();
+        }
+
         if (elements.isEmpty()) {
-            return new BeamSolver(); // Default
+            return new BeamSolver(); // Default when no elements or polygons
         }
 
         boolean hasBeam = false;

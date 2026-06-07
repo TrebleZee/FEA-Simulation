@@ -44,29 +44,53 @@ public final class ModelValidator {
     }
 
     public static ValidationResult validate(FEAData model) {
-        if (model.getElements().isEmpty()) {
+        boolean hasBeamOrTrussElements = !model.getElements().isEmpty();
+        boolean hasPolygonRegions = !model.getPolygonRegions().isEmpty();
+
+        // 1) Require at least one structural definition: either line elements (beam/truss)
+        //    or polygon regions for plane-stress.
+        if (!hasBeamOrTrussElements && !hasPolygonRegions) {
             return ValidationResult.failure(
-                    "Validation failed: No structural elements defined.\n\n" +
-                    "Please draw at least one element on the canvas before running the simulation."
+                "Validation failed: No structural elements defined.\n\n" +
+                "Please draw at least one beam/truss element or define a polygon region " +
+                "before running the simulation."
             );
         }
 
-        if (model.getSupports().isEmpty()) {
-            return ValidationResult.failure(
+        // 2) Supports requirement depends on modeling approach
+        if (hasBeamOrTrussElements) {
+            // For line elements, require at least one node-based support as before
+            if (model.getSupports().isEmpty()) {
+                return ValidationResult.failure(
                     "Validation failed: No supports defined.\n\n" +
                     "The structure is statically unstable. Please add at least one support\n" +
                     "(fixed, pinned, or roller) to a node."
-            );
+                );
+            }
+        } else if (hasPolygonRegions) {
+            // For continuum polygons, accept either node-based supports (if any pre-exist)
+            // or edge-based supports placed on polygon edges.
+            if (model.getSupports().isEmpty() && model.getEdgeSupports().isEmpty()) {
+                return ValidationResult.failure(
+                    "Validation failed: No supports defined for polygon region.\n\n" +
+                    "Please add at least one edge support (fixed/pinned/roller) to a polygon edge,\n" +
+                    "or place a node-based support if applicable."
+                );
+            }
         }
 
-        String floatingError = checkForFloatingElements(model);
-        if (floatingError != null) {
-            return ValidationResult.failure(floatingError);
-        }
+        // 3) Beam/truss specific checks (floating/disconnected elements, zero-length)
+        //    Only meaningful when line elements exist.
+        if (hasBeamOrTrussElements) {
+            String floatingError = checkForFloatingElements(model);
+            if (floatingError != null) {
+                return ValidationResult.failure(floatingError);
+            }
 
-        String geometryError = checkGeometry(model);
-        if (geometryError != null) {
-            return ValidationResult.failure(geometryError);
+            String geometryError = checkGeometry(model);
+            if (geometryError != null) {
+                return ValidationResult.failure(geometryError);
+            }
         }
 
         return ValidationResult.success();

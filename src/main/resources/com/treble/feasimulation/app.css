@@ -1,0 +1,178 @@
+/* =====================
+   Design Tokens
+   ===================== */
+/* Spacing tokens */
+.spacing-8 { -fx-padding: 8; }
+.component-spacing { -fx-padding: 16; }
+.panel-spacing { -fx-padding: 32; }
+
+/* Grid gaps */
+.grid-gaps-8 { -fx-hgap: 8; -fx-vgap: 8; }
+.grid-gaps-16 { -fx-hgap: 16; -fx-vgap: 16; }
+
+/* Color palette (Engineering) */
+/* Primary */
+.root {
+    -fx-font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; /* Typography: Body */
+    -fx-font-size: 14px; /* Body 14px */
+    -fx-background-color: #F8FAFC; /* Background */
+
+    /* JavaFX semantic colors */
+    -fx-accent: #2563EB; /* Primary */
+    -fx-focus-color: #2563EB;
+    -fx-faint-focus-color: rgba(37,99,235,0.20);
+    -fx-text-base-color: #0f172a; /* Slate-900 for good contrast */
+}
+
+/* Headings & typography */
+.h1 {
+    -fx-font-family: "Inter";
+    -fx-font-weight: 600; /* SemiBold */
+    -fx-font-size: 24px; /* H1 */
+}
+
+.h2, .section-title {
+    -fx-font-family: "Inter";
+    -fx-font-weight: 500; /* Medium */
+    -fx-font-size: 18px; /* H2 */
+}
+
+.body {
+    -fx-font-family: "Inter";
+    -fx-font-weight: 400; /* Regular */
+    -fx-font-size: 14px; /* Body */
+}
+
+/* Engineering numeric values */
+.engineering-value, .engineering-input {
+    -fx-font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+    -fx-font-size: 14px;
+}
+
+/* Readability: 140% line height where supported */
+.text-area .content { -fx-line-spacing: 1.4em; }
+.list-view, .table-view { -fx-cell-size: 1.4em; }
+
+/* Panels and containers */
+.tools-panel { -fx-background-color: transparent; }
+.results-panel { -fx-background-color: rgba(255,255,255,0.6); -fx-background-radius: 8; }
+.insights-panel { -fx-background-color: rgba(255,255,255,0.8); -fx-background-radius: 8; }
+
+/* TitledPane header styling to match H2 and use Secondary color */
+.titled-pane > .title {
+    -fx-background-color: #E2E8F0; /* slate-200 */
+    -fx-text-fill: #475569; /* Secondary */
+    -fx-font-family: "Inter";
+    -fx-font-weight: 500;
+    -fx-font-size: 18px;
+    -fx-background-insets: 0, 1;
+}
+
+.titled-pane > .content {
+    -fx-background-color: transparent;
+    -fx-padding: 8 12 12 12;
+}
+
+/* Buttons themed with Primary */
+.button {
+    -fx-background-radius: 6;
+    -fx-background-color: #2563EB; /* Primary */
+    -fx-text-fill: white;
+    -fx-padding: 6 12 6 12;
+}
+.button:hover { -fx-background-color: #1D4ED8; }
+.button:armed { -fx-background-color: #1E40AF; }
+.button:disabled { -fx-opacity: 0.6; }
+
+/* Tables & headers */
+.table-view .column-header-background { -fx-background-color: #E2E8F0; }
+.table-view .column-header, .table-view .filler { -fx-text-fill: #475569; -fx-font-weight: 600; }
+
+/* Menu bar */
+.menu-bar { -fx-background-color: #E2E8F0; }
+.menu-bar .label { -fx-text-fill: #475569; }
+
+/* Canvas container prominence */
+.canvas-container { -fx-background-color: white; -fx-border-color: #E2E8F0; -fx-border-width: 1; -fx-background-radius: 8; }
+
+/* Semantic text colors */
+.text-success { -fx-text-fill: #16A34A; }
+.text-warning { -fx-text-fill: #F59E0B; }
+.text-failure { -fx-text-fill: #DC2626; }
+
+/* Stress legend bar (horizontal) */
+.legend-bar-vmises {
+    -fx-pref-width: 160;
+    -fx-pref-height: 14;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0,1;
+    -fx-background-color:
+        linear-gradient(to right,
+            #0000FF 0%, /* Blue */
+            #00FFFF 20%, /* Cyan */
+            #00FF00 40%, /* Green */
+            #FFFF00 60%, /* Yellow */
+            #FFA500 80%, /* Orange */
+            #FF0000 100% /* Red */
+        ),
+        rgba(0,0,0,0.06);
+    -fx-border-color: #475569;
+    -fx-border-radius: 4;
+}
+
+/* Minor helpers */
+.muted { -fx-text-fill: #64748B; }
+.caps { -fx-font-variant-caps: all-small-caps; }
+
+/* =====================
+   Fixed-size panel helpers
+   Lock panel widths so they do not grow when the window expands
+   ===================== */
+.fixed-left {
+    -fx-pref-width: 220;   /* matches Scene default width split */
+    -fx-max-width: 220;
+}
+
+.fixed-right {
+    -fx-pref-width: 220;
+    -fx-max-width: 220;
+}
+
+.fixed-center {
+    -fx-pref-width: 560;   /* 1000 - 220 - 220 */
+    -fx-max-width: 560;
+}
+
+/* =====================
+   Indicators & Emphasis
+   ===================== */
+.mode-indicator {
+    -fx-text-fill: #475569; /* Secondary */
+    -fx-background-color: rgba(255,255,255,0.85);
+    -fx-padding: 6 12 6 12;
+    -fx-background-radius: 8;
+    -fx-border-color: #E2E8F0;
+    -fx-border-radius: 8;
+}
+
+.scale-indicator {
+    -fx-background-color: rgba(255,255,255,0.85);
+    -fx-padding: 4 8 4 8;
+    -fx-background-radius: 9999; /* pill */
+    -fx-border-color: #E2E8F0;
+    -fx-border-radius: 9999;
+}
+
+.engineering-value-large {
+    -fx-font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+    -fx-font-size: 18px;
+}
+
+.badge {
+    -fx-padding: 2 8 2 8;
+    -fx-background-radius: 9999;
+    -fx-font-weight: 600;
+}
+.badge-good { -fx-background-color: rgba(22,163,74,0.15); -fx-text-fill: #16A34A; }
+.badge-fair { -fx-background-color: rgba(245,158,11,0.15); -fx-text-fill: #F59E0B; }
+.badge-poor { -fx-background-color: rgba(220,38,38,0.15); -fx-text-fill: #DC2626; }

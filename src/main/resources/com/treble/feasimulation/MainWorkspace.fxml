@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.canvas.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.treble.feasimulation.view.MainWorkspaceController">
+    <top>
+        <MenuBar fx:id="menuBar">
+            <menus>
+                <Menu text="File">
+                    <items>
+                        <MenuItem fx:id="exitItem" text="Exit"/>
+                    </items>
+                </Menu>
+                <Menu text="Edit">
+                    <items>
+                        <MenuItem fx:id="clearItem" text="Clear"/>
+                    </items>
+                </Menu>
+                <Menu text="Help"/>
+            </menus>
+        </MenuBar>
+    </top>
+
+    <center>
+        <!-- 12-column responsive grid: left=2, center=8, right=2 -->
+        <GridPane styleClass="grid-gaps-16 panel-spacing">
+            <columnConstraints>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+                <ColumnConstraints percentWidth="8.3333"/>
+            </columnConstraints>
+            <rowConstraints>
+                <!-- Lock row growth so panels don't stretch vertically -->
+                <RowConstraints vgrow="NEVER"/>
+            </rowConstraints>
+
+            <!-- Tools Panel (Left, 2/12 ≈ 16.7%) wrapped in a ScrollPane so all tools are reachable -->
+            <ScrollPane GridPane.columnIndex="0" GridPane.columnSpan="2" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER"
+                        fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" styleClass="fixed-left">
+                <content>
+                    <VBox spacing="8" styleClass="tools-panel component-spacing">
+                        <children>
+                            <Label text="Drawing Tool:" styleClass="section-title"/>
+                            <ChoiceBox fx:id="elementTypeChoice"/>
+                            <Button fx:id="drawElementButton" text="Draw Elements"/>
+                            <Button fx:id="drawPolygonButton" text="Draw Polygons"/>
+                            <Button fx:id="trussModeButton" text="Truss Mode"/>
+
+                            <Separator/>
+                            <Label text="Supports:" styleClass="section-title"/>
+                            <ChoiceBox fx:id="supportTypeChoice"/>
+                            <Button fx:id="placeSupportButton" text="Place Support (click node)"/>
+                            <Button fx:id="placeEdgeSupportButton" text="Place Edge Support (click edge)"/>
+
+                            <Separator/>
+                            <Label text="Material:" styleClass="section-title"/>
+                            <ChoiceBox fx:id="beamMaterialChoice"/>
+                            <Label text="Young's Modulus (Pa):"/>
+                            <TextField fx:id="youngsModulusField"/>
+                            <Label text="Poisson's Ratio:"/>
+                            <TextField fx:id="poissonRatioField"/>
+                            <Label text="Thickness (m):"/>
+                            <TextField fx:id="thicknessField"/>
+
+                            <Separator/>
+                            <Label text="Units" styleClass="section-title"/>
+                            <Label text="Meters per unit:"/>
+                            <TextField fx:id="metersPerUnitField"/>
+
+                            <Separator/>
+                            <Label text="Meshing" styleClass="section-title"/>
+                            <Label text="Mesh Density (Coarse → Fine):"/>
+                            <Slider fx:id="meshDensitySlider"/>
+                            <Label text="Deformation Scale:"/>
+                            <Slider fx:id="deformationScaleSlider"/>
+                            <CheckBox fx:id="showDisplacementArrowsCheckbox" text="Show Displacement Arrows"/>
+
+                            <!-- Layer Visibility Controls -->
+                            <Separator/>
+                            <TitledPane text="Layers" expanded="true">
+                                <content>
+                                    <VBox spacing="8" styleClass="component-spacing">
+                                        <children>
+                                            <CheckBox fx:id="layerNodesCheckbox" text="Nodes" selected="true"/>
+                                            <CheckBox fx:id="layerSupportsCheckbox" text="Supports" selected="true"/>
+                                            <CheckBox fx:id="layerLoadsCheckbox" text="Loads" selected="true"/>
+                                            <CheckBox fx:id="layerMeshCheckbox" text="Mesh" selected="true"/>
+                                            <CheckBox fx:id="layerStressCheckbox" text="Stress" selected="true"/>
+                                            <CheckBox fx:id="layerDeformationCheckbox" text="Deformation" selected="true"/>
+                                            <CheckBox fx:id="layerReactionsCheckbox" text="Reactions" selected="true"/>
+                                        </children>
+                                    </VBox>
+                                </content>
+                            </TitledPane>
+
+                            <Separator/>
+                            <Label text="Distributed Edge Load" styleClass="section-title"/>
+                            <ChoiceBox fx:id="distributedLoadTypeChoice"/>
+                            <Label text="Edge Load Wx (normal):"/>
+                            <TextField fx:id="loadWxField"/>
+                            <Label text="Edge Load Wy (tangential):"/>
+                            <TextField fx:id="loadWyField"/>
+                            <Button fx:id="applyEdgeLoadButton" text="Apply Edge Load (click edge)"/>
+
+                            <Separator/>
+                            <Label text="Point Load" styleClass="section-title"/>
+                            <Label text="Fx:"/>
+                            <TextField fx:id="loadFxField"/>
+                            <Label text="Fy:"/>
+                            <TextField fx:id="loadFyField"/>
+                            <Label text="Click an element or node to place the load."/>
+                            <HBox spacing="8">
+                                <children>
+                                    <Button fx:id="applyLoadButton" text="Apply Point Load"/>
+                                    <Button fx:id="updateLoadButton" text="Update Selected Load"/>
+                                </children>
+                            </HBox>
+
+                            <Separator/>
+                            <Label text="Data Editing" styleClass="section-title"/>
+                            <TabPane fx:id="tablesTabPane">
+                                <tabs>
+                                    <Tab fx:id="loadsTab" text="Loads" closable="false">
+                                        <content>
+                                            <TableView fx:id="pointLoadTable" prefHeight="150.0">
+                                                <columns>
+                                                    <TableColumn fx:id="plIdCol" text="ID" prefWidth="50"/>
+                                                    <TableColumn fx:id="plNodeCol" text="Node" prefWidth="80"/>
+                                                    <TableColumn fx:id="plFxCol" text="Fx" prefWidth="80"/>
+                                                    <TableColumn fx:id="plFyCol" text="Fy" prefWidth="80"/>
+                                                </columns>
+                                            </TableView>
+                                        </content>
+                                    </Tab>
+                                    <Tab fx:id="supportsTab" text="Supports" closable="false">
+                                        <content>
+                                            <TableView fx:id="supportTable" prefHeight="150.0">
+                                                <columns>
+                                                    <TableColumn fx:id="sIdCol" text="ID" prefWidth="50"/>
+                                                    <TableColumn fx:id="sNodeCol" text="Node" prefWidth="80"/>
+                                                    <TableColumn fx:id="sTypeCol" text="Type" prefWidth="100"/>
+                                                </columns>
+                                            </TableView>
+                                        </content>
+                                    </Tab>
+                                </tabs>
+                            </TabPane>
+
+                            <Separator/>
+                            <Button fx:id="runButton" text="Run Simulation"/>
+
+                            <!-- Properties Panel (below Tools Panel) -->
+                            <Separator/>
+                            <TitledPane text="Properties" expanded="true">
+                                <content>
+                                    <GridPane styleClass="grid-gaps-8 component-spacing">
+                                        <columnConstraints>
+                                            <ColumnConstraints halignment="LEFT" hgrow="NEVER"/>
+                                            <ColumnConstraints halignment="LEFT" hgrow="ALWAYS"/>
+                                        </columnConstraints>
+                                        <children>
+                                            <Label text="Material:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                            <ChoiceBox fx:id="propMaterialChoice" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+
+                                            <Label text="E (Young's Modulus):" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propEField" GridPane.rowIndex="1" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="A (Area):" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propAField" GridPane.rowIndex="2" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="I (Second Moment):" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propIField" GridPane.rowIndex="3" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="t (Thickness):" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propThicknessField" GridPane.rowIndex="4" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="Load Magnitude:" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propLoadMagField" GridPane.rowIndex="5" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="Load Direction (deg):" GridPane.rowIndex="6" GridPane.columnIndex="0"/>
+                                            <TextField fx:id="propLoadDirField" GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="engineering-input"/>
+
+                                            <Label text="Support Type:" GridPane.rowIndex="7" GridPane.columnIndex="0"/>
+                                            <ChoiceBox fx:id="propSupportTypeChoice" GridPane.rowIndex="7" GridPane.columnIndex="1"/>
+                                        </children>
+                                    </GridPane>
+                                </content>
+                            </TitledPane>
+                        </children>
+                    </VBox>
+                </content>
+            </ScrollPane>
+
+            <!-- Simulation Canvas (Center, 8/12 ≈ 66.7%) with overlay indicators -->
+            <StackPane GridPane.columnIndex="2" GridPane.columnSpan="8" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER"
+                       styleClass="canvas-container fixed-center">
+                <children>
+                    <Canvas fx:id="canvas"/>
+                    <!-- Overlay for Mode + Scale indicators; mouseTransparent so it doesn't eat events -->
+                    <BorderPane mouseTransparent="true" pickOnBounds="false">
+                        <top>
+                            <HBox alignment="CENTER" spacing="8" BorderPane.alignment="CENTER">
+                                <children>
+                                    <Label fx:id="modeIndicatorLabel" text="MODE: DRAWING" styleClass="h2 mode-indicator"/>
+                                </children>
+                            </HBox>
+                        </top>
+                        <right>
+                            <VBox alignment="TOP_RIGHT" spacing="4" BorderPane.alignment="TOP_RIGHT">
+                                <children>
+                                    <Label fx:id="scaleIndicatorLabel" text="100 px = 1.0 m" styleClass="scale-indicator engineering-value"/>
+                                </children>
+                            </VBox>
+                        </right>
+                    </BorderPane>
+                </children>
+            </StackPane>
+
+            <!-- Right side: Results, Mesh Quality, Educational Insights (2/12 ≈ 16.7%) -->
+            <VBox GridPane.columnIndex="10" GridPane.columnSpan="2" spacing="16" styleClass="fixed-right" GridPane.hgrow="NEVER" GridPane.vgrow="NEVER">
+                <children>
+                    <TitledPane text="Results" expanded="true" styleClass="results-panel component-spacing" VBox.vgrow="NEVER">
+                        <content>
+                            <VBox spacing="8" styleClass="spacing-8">
+                                <children>
+                                    <!-- Dedicated Key Results -->
+                                    <Label text="Maximum Stress" styleClass="muted"/>
+                                    <Label fx:id="maxStressValueLabel" text="—" styleClass="engineering-value-large"/>
+                                    <Label text="Maximum Deflection" styleClass="muted"/>
+                                    <Label fx:id="maxDeflectionValueLabel" text="—" styleClass="engineering-value-large"/>
+                                    <Label text="Safety Factor" styleClass="muted"/>
+                                    <Label fx:id="safetyFactorValueLabel" text="—" styleClass="engineering-value-large"/>
+                                    <Label text="Solver Status" styleClass="muted"/>
+                                    <Label fx:id="solverStatusValueLabel" text="—" styleClass="engineering-value-large"/>
+                                    <Separator/>
+                                    <Label text="Max Tensile Stress:"/>
+                                    <Label fx:id="maxTensileStressLabel" text="N/A" styleClass="engineering-value"/>
+                                    <Label text="Max Compressive Stress:"/>
+                                    <Label fx:id="maxCompressiveStressLabel" text="N/A" styleClass="engineering-value"/>
+                                    <Separator/>
+                                    <Label text="— Selected Element Stresses —"/>
+                                    <Label text="Sigma X (Pa):"/>
+                                    <Label fx:id="selectedSigmaXLabel" text="N/A" styleClass="engineering-value"/>
+                                    <Label text="Sigma Y (Pa):"/>
+                                    <Label fx:id="selectedSigmaYLabel" text="N/A" styleClass="engineering-value"/>
+                                    <Label text="Tau XY (Pa):"/>
+                                    <Label fx:id="selectedTauXYLabel" text="N/A" styleClass="engineering-value"/>
+                                    <Label text="Von Mises (Pa):"/>
+                                    <Label fx:id="selectedVonMisesLabel" text="N/A" styleClass="engineering-value"/>
+
+                                    <!-- Stress heatmap legend inside Results Panel -->
+                                    <Separator/>
+                                    <Label text="Stress Legend" styleClass="h2"/>
+                                    <HBox spacing="8" alignment="CENTER_LEFT">
+                                        <children>
+                                            <Label text="Low" styleClass="muted body"/>
+                                            <Region styleClass="legend-bar-vmises" HBox.hgrow="ALWAYS"/>
+                                            <Label text="High" styleClass="muted body"/>
+                                        </children>
+                                    </HBox>
+
+                                    <Separator/>
+                                    <Label text="Reaction Forces" styleClass="h2"/>
+                                    <ListView fx:id="reactionsListView" prefHeight="100.0"/>
+                                </children>
+                            </VBox>
+                        </content>
+                    </TitledPane>
+
+                    <!-- Mesh Diagnostics / Quality Panel -->
+                    <TitledPane text="Mesh Quality" expanded="true" VBox.vgrow="NEVER">
+                        <content>
+                            <GridPane styleClass="grid-gaps-8 component-spacing">
+                                <columnConstraints>
+                                    <ColumnConstraints halignment="LEFT" hgrow="NEVER"/>
+                                    <ColumnConstraints halignment="LEFT" hgrow="ALWAYS"/>
+                                </columnConstraints>
+                                <children>
+                                    <Label text="Element count:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                    <Label fx:id="meshElementCountLabel" text="—" GridPane.rowIndex="0" GridPane.columnIndex="1" styleClass="engineering-value"/>
+
+                                    <Label text="Avg. aspect ratio:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                    <Label fx:id="meshAvgAspectRatioLabel" text="—" GridPane.rowIndex="1" GridPane.columnIndex="1" styleClass="engineering-value"/>
+
+                                    <Label text="Quality rating:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                    <Label fx:id="meshQualityRatingLabel" text="—" GridPane.rowIndex="2" GridPane.columnIndex="1" styleClass="badge"/>
+
+                                    <Label text="Suggested refinement:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                    <Label fx:id="meshSuggestedRefinementLabel" text="—" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                </children>
+                            </GridPane>
+                        </content>
+                    </TitledPane>
+
+                    <TitledPane text="Educational Insights" expanded="true" styleClass="insights-panel component-spacing" VBox.vgrow="NEVER">
+                        <content>
+                            <TextArea fx:id="explanationArea" prefRowCount="8" promptText="Result explanation will appear here." wrapText="true" editable="false"/>
+                        </content>
+                    </TitledPane>
+                </children>
+            </VBox>
+        </GridPane>
+    </center>
+</BorderPane>

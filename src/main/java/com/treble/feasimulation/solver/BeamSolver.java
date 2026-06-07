@@ -180,16 +180,25 @@ public class BeamSolver implements FEASolver {
         // global DOFs arranged [ux0, uy0, theta0, ux1, uy1, theta1, ...]
         public final double[] displacements;
         public final List<ElementResult> elementResults;
+        public final List<ReactionForce> supportReactions;
 
         public Result(double[] displacements, List<ElementResult> elementResults) {
+            this(displacements, elementResults, java.util.Collections.emptyList());
+        }
+
+        public Result(double[] displacements, List<ElementResult> elementResults, List<ReactionForce> supportReactions) {
             this.displacements = displacements;
             this.elementResults = elementResults;
+            this.supportReactions = supportReactions;
         }
 
         @Override
         public double[] getDisplacements() {
             return displacements;
         }
+
+        @Override
+        public List<ReactionForce> getSupportReactions() { return supportReactions; }
     }
 
     /**
@@ -559,6 +568,28 @@ public class BeamSolver implements FEASolver {
             elemResults.add(new ElementResult(e.getId(), M1, M2, axial, stress));
         }
 
-        return new Result(u, elemResults);
+        // PHASE 6: REACTIONS (at constrained DOFs)
+        // ========================================
+        // Compute R = K * u - F and collect components at supported nodes only
+        double[] Ku = new double[ndof];
+        for (int i = 0; i < ndof; i++) {
+            double sum = 0.0;
+            for (int j = 0; j < ndof; j++) sum += K[i][j] * u[j];
+            Ku[i] = sum;
+        }
+        double[] R = new double[ndof];
+        for (int i = 0; i < ndof; i++) R[i] = Ku[i] - F[i];
+
+        List<ReactionForce> reactions = new ArrayList<>();
+        for (Support s : data.getSupports()) {
+            Integer ni = nodeIndex.get(s.getNodeId());
+            if (ni == null) continue;
+            double rFx = s.isRestrainX() ? R[3*ni] : 0.0;
+            double rFy = s.isRestrainY() ? R[3*ni + 1] : 0.0;
+            double rM  = s.isRestrainRotation() ? R[3*ni + 2] : 0.0;
+            reactions.add(new ReactionForce(s.getId(), s.getNodeId(), rFx, rFy, rM));
+        }
+
+        return new Result(u, elemResults, reactions);
     }
 }

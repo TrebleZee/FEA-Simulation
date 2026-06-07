@@ -120,6 +120,7 @@ public final class UnitConverter {
             if (i + 1 < u.length) u[i + 1] *= inv;
             // rotation (i+2) unchanged
         }
-        return new BeamSolver.Result(u, si.elementResults);
+        // Reaction forces are already in SI (N, N·m) and we keep SI in UI; pass through unchanged
+        return new BeamSolver.Result(u, si.elementResults, si.getSupportReactions());
     }
 }
