@@ -30,7 +30,8 @@ public interface MeshGenerator {
      * Generates a mesh for the given polygon region.
      *
      * @param region The polygon region to mesh.
+     * @param density Mesh density (e.g., maximum edge length or target number of elements).
      * @return A MeshResult containing nodes and elements.
      */
-    MeshResult generateMesh(PolygonRegion region);
+    MeshResult generateMesh(PolygonRegion region, double density);
 }

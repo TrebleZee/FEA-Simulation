@@ -11,7 +11,10 @@ import java.util.List;
  */
 public class TriangularMeshGenerator implements MeshGenerator {
     @Override
-    public MeshResult generateMesh(PolygonRegion region) {
+    public MeshResult generateMesh(PolygonRegion region, double density) {
+        // For a simple ear-clipping algorithm, density isn't easily applied 
+        // without adding Steiner points. For now, we'll keep the simple triangulation
+        // but the density parameter is available for future refinement (e.g., edge subdivision).
         List<PolygonRegion.Vertex> vertices = new ArrayList<>(region.getVertices());
         List<Node> nodes = new ArrayList<>();
         List<TriangularElement> elements = new ArrayList<>();

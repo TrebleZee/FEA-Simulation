@@ -14,6 +14,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.geometry.Insets;
 
+import javafx.scene.control.Slider;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -43,6 +44,7 @@ public class MainView {
     private final TextField loadFyField;
     private final TextField poissonRatioField;
     private final TextField thicknessField;
+    private final Slider meshDensitySlider;
     private final Button applyLoadButton;
     private final Button updateLoadButton;
     private final Button runButton;
@@ -91,6 +93,13 @@ public class MainView {
 
         poissonRatioField = new TextField("0.3");
         thicknessField = new TextField("0.01");
+
+        meshDensitySlider = new Slider(0.1, 10.0, 1.0);
+        meshDensitySlider.setShowTickLabels(true);
+        meshDensitySlider.setShowTickMarks(true);
+        meshDensitySlider.setMajorTickUnit(2.0);
+        meshDensitySlider.setMinorTickCount(5);
+        meshDensitySlider.setBlockIncrement(0.5);
 
         loadFxField = new TextField("0");
         loadFyField = new TextField("-1000");
@@ -143,6 +152,7 @@ public class MainView {
                 new Label("Material:"), beamMaterialChoice,
                 new Label("Poisson's Ratio:"), poissonRatioField,
                 new Label("Thickness (m):"), thicknessField,
+                new Label("Mesh Density (Coarse -> Fine):"), meshDensitySlider,
                 new Label("Point Load Fx:"), loadFxField,
                 new Label("Point Load Fy:"), loadFyField,
                 new Label("Click an element or node to place the load."), applyLoadButton, updateLoadButton,
@@ -180,6 +190,7 @@ public class MainView {
     public TextField getLoadFyField() { return loadFyField; }
     public TextField getPoissonRatioField() { return poissonRatioField; }
     public TextField getThicknessField() { return thicknessField; }
+    public Slider getMeshDensitySlider() { return meshDensitySlider; }
     public Button getApplyLoadButton() { return applyLoadButton; }
     public Button getUpdateLoadButton() { return updateLoadButton; }
     public Button getRunButton() { return runButton; }

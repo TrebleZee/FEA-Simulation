@@ -202,6 +202,9 @@ public class MainPresenter implements Presenter {
 
             // Run the solver via factory
             FEASolver solver = SolverFactory.getSolver(model);
+            if (solver instanceof PlaneStressSolver pss) {
+                pss.setMeshDensity(view.getMeshDensitySlider().getValue());
+            }
             SolverResult result = solver.solve(model);
 
             if (result instanceof TrussSolver.Result tr) {

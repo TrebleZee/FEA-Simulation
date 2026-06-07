@@ -22,7 +22,7 @@ public class TriangularMeshGeneratorTest {
         PolygonRegion square = PolygonRegion.fromCoordinates(1, coords, 1);
         TriangularMeshGenerator generator = new TriangularMeshGenerator();
         
-        MeshGenerator.MeshResult result = generator.generateMesh(square);
+        MeshGenerator.MeshResult result = generator.generateMesh(square, 1.0);
         
         assertNotNull(result);
         assertEquals(4, result.getNodes().size(), "Should have 4 nodes for a square");
@@ -48,7 +48,7 @@ public class TriangularMeshGeneratorTest {
         PolygonRegion lPoly = PolygonRegion.fromCoordinates(1, coords, 1);
         TriangularMeshGenerator generator = new TriangularMeshGenerator();
         
-        MeshGenerator.MeshResult result = generator.generateMesh(lPoly);
+        MeshGenerator.MeshResult result = generator.generateMesh(lPoly, 1.0);
         
         assertNotNull(result);
         assertEquals(6, result.getNodes().size(), "Should have 6 nodes");
