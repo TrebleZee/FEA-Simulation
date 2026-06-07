@@ -91,5 +91,30 @@ public class PolygonRegion {
             this.x = x;
             this.y = y;
         }
+
+        public double getX() { return x; }
+        public double getY() { return y; }
+    }
+
+    public static final class Edge {
+        private final int startVertexIndex;
+        private final int endVertexIndex;
+
+        public Edge(int startVertexIndex, int endVertexIndex) {
+            this.startVertexIndex = startVertexIndex;
+            this.endVertexIndex = endVertexIndex;
+        }
+
+        public int getStartVertexIndex() { return startVertexIndex; }
+        public int getEndVertexIndex() { return endVertexIndex; }
+    }
+
+    public List<Edge> getEdges() {
+        List<Edge> edges = new ArrayList<>();
+        int count = vertices.size();
+        for (int i = 0; i < count; i++) {
+            edges.add(new Edge(i, (i + 1) % count));
+        }
+        return Collections.unmodifiableList(edges);
     }
 }
