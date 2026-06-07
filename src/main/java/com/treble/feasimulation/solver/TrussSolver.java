@@ -5,6 +5,8 @@ import org.ejml.data.DMatrixRMaj;
 import org.ejml.dense.row.CommonOps_DDRM;
 import org.ejml.dense.row.factory.LinearSolverFactory_DDRM;
 import org.ejml.interfaces.linsol.LinearSolverDense;
+import org.ejml.simple.SimpleMatrix;
+import org.ejml.simple.SimpleSVD;
 
 import java.util.*;
 
@@ -185,25 +187,24 @@ public class TrussSolver implements FEASolver {
             }
         }
 
-        DMatrixRMaj xred = new DMatrixRMaj(freeCount, 1);
-        LinearSolverDense<DMatrixRMaj> solver = LinearSolverFactory_DDRM.lu(freeCount);
-        if (!solver.setA(Ared)) {
+        // Detect singularity after applying boundary conditions using SVD-based rank check
+        // This avoids false negatives when LU.setA() succeeds on a singular matrix with zero load vector.
+        SimpleMatrix Amat = SimpleMatrix.wrap(Ared);
+        SimpleSVD<SimpleMatrix> svd = Amat.svd();
+        double[] sing = svd.getSingularValues();
+        double maxSing = 0.0;
+        for (double v : sing) if (v > maxSing) maxSing = v;
+        // Numerical threshold for rank determination
+        double tolRank = Math.max(Amat.numRows(), Amat.numCols()) * maxSing * 1e-12;
+        int rank = 0;
+        for (double v : sing) if (v > tolRank) rank++;
+        if (rank < freeCount) {
             throw new IllegalStateException("Singular stiffness matrix (structure unstable or insufficient supports)");
         }
 
-        // Check diagonal elements for zero stiffness (indicates a mechanism)
-        for (int i = 0; i < freeCount; i++) {
-            if (Math.abs(Ared.get(i, i)) < 1e-12) {
-                // Find which node/DOF this corresponds to
-                int globalDof = -1;
-                for (int g = 0; g < ndof; g++) if (freeMap[g] == i) globalDof = g;
-                int ni = globalDof / 2;
-                int node_id = nodes.get(ni).getId();
-                String dofName = (globalDof % 2 == 0) ? "UX" : "UY";
-                throw new IllegalStateException(String.format("Unstable structure: node %d has zero stiffness in %s. Check connectivity and supports.", node_id, dofName));
-            }
-        }
-
+        DMatrixRMaj xred = new DMatrixRMaj(freeCount, 1);
+        LinearSolverDense<DMatrixRMaj> solver = LinearSolverFactory_DDRM.lu(freeCount);
+        solver.setA(Ared);
         solver.solve(bred, xred);
 
         double[] fullU = new double[ndof];

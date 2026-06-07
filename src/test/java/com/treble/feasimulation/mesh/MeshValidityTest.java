@@ -15,14 +15,18 @@ public class MeshValidityTest {
         PolygonRegion triangle = PolygonRegion.fromCoordinates(1, coords, 1);
         TriangularMeshGenerator generator = new TriangularMeshGenerator();
         MeshGenerator.MeshResult result = generator.generateMesh(triangle, 1.0);
-        
-        assertEquals(1, result.getElements().size());
-        TriangularElement elem = result.getElements().get(0);
-        assertTrue(elem.getArea() > 0);
-        
-        // Check for inverted triangles (Area should be correct regardless of vertex order due to Math.abs)
-        // However, CCW order is preferred for some operations.
-        assertEquals(0.5 * 100 * 50, elem.getArea(), 1e-9);
+
+        // With density-driven subdivision, a triangle may be split into many small triangles.
+        assertTrue(result.getElements().size() >= 1, "Should create at least one triangle");
+
+        // Sum of areas should equal the polygon area (within tolerance)
+        double expectedArea = 0.5 * 100 * 50; // 2500
+        double areaSum = 0.0;
+        for (TriangularElement elem : result.getElements()) {
+            assertTrue(elem.getArea() > 0, "Triangle area should be positive");
+            areaSum += elem.getArea();
+        }
+        assertEquals(expectedArea, areaSum, 1e-6, "Total meshed area should match polygon area");
     }
 
     @Test
@@ -31,13 +35,14 @@ public class MeshValidityTest {
         PolygonRegion square = PolygonRegion.fromCoordinates(1, coords, 1);
         TriangularMeshGenerator generator = new TriangularMeshGenerator();
         
-        // Current implementation IGNORES density. 
-        // This test documents current behavior and will fail if we improve it.
-        MeshGenerator.MeshResult result1 = generator.generateMesh(square, 1.0);
-        MeshGenerator.MeshResult result2 = generator.generateMesh(square, 10.0);
-        
-        assertEquals(result1.getElements().size(), result2.getElements().size(), 
-            "Mesh density currently has no effect on ear-clipping generator");
+        // Density affects subdivision: smaller target length -> more triangles
+        MeshGenerator.MeshResult dense = generator.generateMesh(square, 1.0);   // smaller target, denser
+        MeshGenerator.MeshResult coarse = generator.generateMesh(square, 10.0); // larger target, coarser
+
+        assertTrue(dense.getElements().size() >= coarse.getElements().size(),
+            "Denser mesh should have at least as many elements as coarse mesh");
+        assertNotEquals(dense.getElements().size(), coarse.getElements().size(),
+            "Density parameter should affect triangle count");
     }
 
     @Test

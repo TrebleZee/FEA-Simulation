@@ -5,6 +5,8 @@ import com.treble.feasimulation.model.Material;
 import com.treble.feasimulation.model.MaterialLibrary;
 import com.treble.feasimulation.view.BeamCanvasView;
 import com.treble.feasimulation.view.MainView;
+import com.treble.feasimulation.model.UnitSettings;
+import com.treble.feasimulation.service.UnitConverter;
 import com.treble.feasimulation.service.ResultExplanationService;
 import com.treble.feasimulation.solver.*;
 import javafx.application.Platform;
@@ -266,40 +268,58 @@ public class MainPresenter implements Presenter {
                 return;
             }
 
-            // Run the solver via factory
-            FEASolver solver = SolverFactory.getSolver(model);
+            // Units: read user-defined length scale (meters per model unit)
+            double metersPerUnit = 1.0;
+            try {
+                String txt = view.getMetersPerUnitField().getText();
+                if (txt != null && !txt.isBlank()) metersPerUnit = Double.parseDouble(txt.trim());
+                if (!(metersPerUnit > 0)) metersPerUnit = 1.0;
+            } catch (Exception ignore) {
+                metersPerUnit = 1.0;
+            }
+            UnitSettings units = new UnitSettings(metersPerUnit, 1.0);
+
+            // Convert geometry to SI for solving
+            com.treble.feasimulation.model.FEAData siModel = UnitConverter.toSI(model, units);
+
+            // Run the solver via factory on SI-normalized model
+            FEASolver solver = SolverFactory.getSolver(siModel);
             if (solver instanceof PlaneStressSolver pss) {
                 pss.setMeshDensity(view.getMeshDensitySlider().getValue());
             }
-            SolverResult result = solver.solve(model);
+            SolverResult resultSI = solver.solve(siModel);
 
-            if (result instanceof TrussSolver.Result tr) {
+            if (resultSI instanceof TrussSolver.Result trSI) {
                 double scale = view.getDeformationScaleSlider().getValue();
-                canvasView.showTrussResult(tr, scale);
-                updateTrussStressSummary(tr);
+                // Convert displacements to display units for visualization
+                TrussSolver.Result trDisp = UnitConverter.trussResultToDisplay(trSI, units);
+                canvasView.showTrussResult(trDisp, scale);
+                updateTrussStressSummary(trSI);
 
                 ResultExplanationService expl = new ResultExplanationService();
-                String explanation = expl.explain(tr, model);
+                String explanation = expl.explain(trSI, model);
                 view.getExplanationArea().setText(explanation);
-            } else if (result instanceof BeamSolver.Result br) {
+            } else if (resultSI instanceof BeamSolver.Result brSI) {
                 double scale = view.getDeformationScaleSlider().getValue();
-                canvasView.showResult(br, scale);
-                updateStressSummary(br);
+                BeamSolver.Result brDisp = UnitConverter.beamResultToDisplay(brSI, units);
+                canvasView.showResult(brDisp, scale);
+                updateStressSummary(brSI);
 
                 ResultExplanationService expl = new ResultExplanationService();
-                String explanation = expl.explain(br, model);
+                String explanation = expl.explain(brSI, model);
                 view.getExplanationArea().setText(explanation);
-            } else if (result instanceof com.treble.feasimulation.solver.PlaneStressResult psr) {
+            } else if (resultSI instanceof com.treble.feasimulation.solver.PlaneStressResult psrSI) {
                 double scale = view.getDeformationScaleSlider().getValue();
-                canvasView.showPlaneStressResult(psr, scale);
-                updatePlaneStressSummary(psr);
+                com.treble.feasimulation.solver.PlaneStressResult psrDisp = UnitConverter.planeStressResultToDisplay(psrSI, units);
+                canvasView.showPlaneStressResult(psrDisp, scale);
+                updatePlaneStressSummary(psrSI);
 
                 ResultExplanationService expl = new ResultExplanationService();
-                String explanation = expl.explain(psr, model);
+                String explanation = expl.explain(psrSI, model);
                 view.getExplanationArea().setText(explanation);
             } else {
                 // PlaneStressSolver or other future solvers
-                view.getExplanationArea().setText("Results for " + result.getClass().getSimpleName() + " are not yet visually supported.");
+                view.getExplanationArea().setText("Results for " + resultSI.getClass().getSimpleName() + " are not yet visually supported.");
             }
         } catch (UnsupportedOperationException uoe) {
             showErrorDialog("Not Supported", uoe.getMessage());

@@ -11,7 +11,7 @@ import java.util.List;
  */
 public class TriangularMeshGenerator implements MeshGenerator {
     @Override
-    public MeshResult generateMesh(PolygonRegion region, double density) {
+    public MeshResult generateMesh(PolygonRegion region, double density, int startNodeId, int startElementId) {
         // Subdivide edges based on density
         List<PolygonRegion.Vertex> originalVertices = region.getVertices();
         List<PolygonRegion.Vertex> subdividedVertices = new ArrayList<>();
@@ -40,9 +40,10 @@ public class TriangularMeshGenerator implements MeshGenerator {
         List<Node> nodes = new ArrayList<>();
         List<TriangularElement> elements = new ArrayList<>();
 
-        // Create nodes for each vertex
+        // Create nodes for each vertex — IDs start at startNodeId so multiple regions
+        // meshed sequentially produce globally unique IDs.
         for (int i = 0; i < subdividedVertices.size(); i++) {
-            nodes.add(new Node(i + 1, subdividedVertices.get(i).x, subdividedVertices.get(i).y));
+            nodes.add(new Node(startNodeId + i, subdividedVertices.get(i).x, subdividedVertices.get(i).y));
         }
 
         if (subdividedVertices.size() < 3) {
@@ -55,7 +56,7 @@ public class TriangularMeshGenerator implements MeshGenerator {
             indexList.add(i);
         }
 
-        int elementIdCounter = 1;
+        int elementIdCounter = startElementId;
         while (indexList.size() > 3) {
             boolean earFound = false;
             for (int i = 0; i < indexList.size(); i++) {
@@ -107,20 +108,10 @@ public class TriangularMeshGenerator implements MeshGenerator {
         PolygonRegion.Vertex c = vertices.get(cIdx);
         PolygonRegion.Vertex n = vertices.get(nIdx);
 
-        // Must be convex
-        if (crossProduct(p, c, n) <= 0) {
-            // Check if we are using CCW or CW. 
-            // Standard ear clipping assumes CCW.
-            // Let's check the signed area of the whole polygon if we want to be robust,
-            // but for now assume CCW or adjust cross product sign.
-            // Actually, if crossProduct <= 0 it's either concave or collinear.
-            // Wait, we need to know the winding order.
-            if (isClockwise(vertices)) {
-                 if (crossProduct(p, c, n) >= 0) return false;
-            } else {
-                 if (crossProduct(p, c, n) <= 0) return false;
-            }
-        }
+        // Standard ear clipping assumes CCW winding. PolygonRegion now enforces CCW.
+        // For CCW, a vertex forms a convex corner (ear tip) when cross > 0.
+        // Collinear or concave (cross <= 0) cannot be an ear.
+        if (crossProduct(p, c, n) <= 0) return false;
 
         // No other vertex should be inside the triangle (p, c, n)
         for (Integer idx : indexList) {

@@ -20,6 +20,19 @@ public class PolygonRegion {
         this.id = id;
         this.materialId = materialId;
         this.vertices = new ArrayList<>(vertices);
+        ensureCounterClockwise();
+    }
+
+    private void ensureCounterClockwise() {
+        double area = 0;
+        for (int i = 0; i < vertices.size(); i++) {
+            Vertex v1 = vertices.get(i);
+            Vertex v2 = vertices.get((i + 1) % vertices.size());
+            area += (v2.x - v1.x) * (v2.y + v1.y);
+        }
+        if (area > 0) {
+            Collections.reverse(vertices);
+        }
     }
 
     public static PolygonRegion fromCoordinates(int id, double[][] coordinates, int materialId) {

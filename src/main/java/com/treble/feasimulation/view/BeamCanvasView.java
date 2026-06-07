@@ -1326,8 +1326,9 @@ public class BeamCanvasView {
         double dy = y2 - y1;
         double len = Math.hypot(dx, dy);
         if (len < 1e-6) return;
-        double nx = -dy / len;
-        double ny = dx / len;
+        // Outward normal for CCW polygon is (dy/len, -dx/len)
+        double nx = dy / len;
+        double ny = -dx / len;
 
         g.setStroke(color);
         g.setLineWidth(2);
@@ -1337,6 +1338,11 @@ public class BeamCanvasView {
     }
 
     private Optional<PolygonEdgeHit> findNearestPolygonEdge(Point2D p, double tol) {
+        // Improved hit-testing for edges:
+        // - Use true line distance when near the segment, with a small endpoint slack so clicks near
+        //   the extended line still select the edge.
+        // - Fall back to endpoint distance inside tolerance.
+        // This makes selection more reliable, especially near shallow angles and segment ends.
         PolygonEdgeHit best = null;
         for (PolygonRegion region : model.getPolygonRegions()) {
             int n = region.getVertexCount();
@@ -1344,9 +1350,49 @@ public class BeamCanvasView {
                 int j = (i + 1) % n;
                 Point2D p1 = new Point2D(region.getX(i), region.getY(i));
                 Point2D p2 = new Point2D(region.getX(j), region.getY(j));
-                SegmentProjection proj = projectPointOntoSegment(p, p1, p2);
-                if (proj.distance <= tol && (best == null || proj.distance < best.distance)) {
-                    best = new PolygonEdgeHit(region.getId(), i, proj.distance);
+
+                double dx = p2.getX() - p1.getX();
+                double dy = p2.getY() - p1.getY();
+                double L = Math.hypot(dx, dy);
+                if (L < 1e-9) continue;
+
+                // Unit direction and its normal
+                double ux = dx / L, uy = dy / L;
+                double nx = -uy, ny = ux;
+
+                // Vector from p1 to pointer
+                double apx = p.getX() - p1.getX();
+                double apy = p.getY() - p1.getY();
+
+                // Unclamped projection parameter (how far along the edge the perpendicular foot is)
+                double t0 = apx * ux + apy * uy; // in pixels (since coords are in canvas space)
+                double tNorm = t0 / L;           // normalized to [0,1] range along the segment
+
+                // Perpendicular distance to the infinite line through the edge
+                double dLine = Math.abs(apx * nx + apy * ny);
+
+                // Allow a small slack past the endpoints, proportional to tol relative to the edge length.
+                // This helps selecting edges when clicking slightly beyond their ends or at shallow angles.
+                double endSlack = Math.min(0.25, (tol / Math.max(L, 1.0)) * 2.0); // up to 25% of length
+
+                boolean withinExtendedSegment = (tNorm >= -endSlack) && (tNorm <= 1.0 + endSlack);
+
+                double candidateDistance = Double.POSITIVE_INFINITY;
+                if (withinExtendedSegment && dLine <= tol) {
+                    // Best case: perpendicular distance inside tolerance near the segment span
+                    candidateDistance = dLine;
+                } else {
+                    // Fallback: check endpoint proximity (capsule ends)
+                    double d1 = p.distance(p1);
+                    double d2 = p.distance(p2);
+                    double dEnd = Math.min(d1, d2);
+                    if (dEnd <= tol) {
+                        candidateDistance = dEnd;
+                    }
+                }
+
+                if (candidateDistance <= tol && (best == null || candidateDistance < best.distance)) {
+                    best = new PolygonEdgeHit(region.getId(), i, candidateDistance);
                 }
             }
         }

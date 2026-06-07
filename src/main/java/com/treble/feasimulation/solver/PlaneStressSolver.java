@@ -29,28 +29,33 @@ public class PlaneStressSolver implements FEASolver {
         List<TriangularElement> allElements = new ArrayList<>();
         Map<Integer, List<Node>> regionToNodes = new HashMap<>();
 
+        // nextNodeId and nextElementId are threaded across all regions so that every
+        // node and element in the global assembly has a unique ID regardless of how
+        // many polygon regions the model contains.
+        int nextNodeId = 1;
+        int nextElementId = 1;
+
         MeshGenerator generator = new TriangularMeshGenerator();
         for (PolygonRegion region : data.getPolygonRegions()) {
-            MeshGenerator.MeshResult mesh = generator.generateMesh(region, meshDensity);
-            
+            MeshGenerator.MeshResult mesh = generator.generateMesh(region, meshDensity, nextNodeId, nextElementId);
+
+            // Advance counters BEFORE processing so accidental re-use is impossible.
+            nextNodeId += mesh.getNodes().size();
+            nextElementId += mesh.getElements().size();
+
             Material material = data.getMaterials().stream()
                     .filter(m -> m.getId() == region.getMaterialId())
                     .findFirst()
                     .orElse(MaterialLibrary.getDefaultMaterial());
-            
+
             double e = material.getYoungsModulus();
             double nu = material.getPoissonRatio();
             double t = material.getThickness();
 
-            // Update thickness and compute stiffness for elements
+            // Recreate each element with the correct material thickness (the mesh
+            // generator uses a placeholder thickness of 1.0; TriangularElement.thickness
+            // is final so we must rebuild here).
             for (TriangularElement element : mesh.getElements()) {
-                // Ensure we use the material thickness
-                // We create a new element to ensure all internal fields (like area) are consistent 
-                // but actually TriangularElement already has thickness from material.
-                // Wait, it was created with 1.0 in generator. 
-                // Let's use a reflected change or just set it if possible.
-                // TriangularElement.thickness is final, so we MUST recreate or change it.
-                // Easiest is to recreate here or modify TriangularElement.
                 TriangularElement correctElement = new TriangularElement(
                     element.getId(),
                     element.getNodes()[0],
@@ -65,7 +70,6 @@ public class PlaneStressSolver implements FEASolver {
 
             regionToNodes.put(region.getId(), mesh.getNodes());
             allNodes.addAll(mesh.getNodes());
-            // allElements.addAll(mesh.getElements()); // Replaced by the loop above
         }
 
         int nNodes = allNodes.size();
@@ -128,13 +132,13 @@ public class PlaneStressSolver implements FEASolver {
             PolygonRegion.Edge edge = edges.get(es.getEdgeIndex());
             // In TriangularMeshGenerator, nodes are created by subdividing edges.
             // We need to find all nodes that lie on this edge.
-            Node vStart = regionNodes.get(edge.getStartVertexIndex());
-            Node vEnd = regionNodes.get(edge.getEndVertexIndex());
+            PolygonRegion.Vertex pStart = region.getVertices().get(edge.getStartVertexIndex());
+            PolygonRegion.Vertex pEnd = region.getVertices().get(edge.getEndVertexIndex());
 
-            double x1 = vStart.getX();
-            double y1 = vStart.getY();
-            double x2 = vEnd.getX();
-            double y2 = vEnd.getY();
+            double x1 = pStart.getX();
+            double y1 = pStart.getY();
+            double x2 = pEnd.getX();
+            double y2 = pEnd.getY();
 
             for (Node n : regionNodes) {
                 // Check if node n is on segment (x1,y1)-(x2,y2)
@@ -148,8 +152,9 @@ public class PlaneStressSolver implements FEASolver {
                         double dy = y2 - y1;
                         double L = Math.hypot(dx, dy);
                         if (L > 1e-12) {
-                            double nx = -dy / L;
-                            double ny = dx / L;
+                            // Outward normal for CCW polygon is (dy/L, -dx/L)
+                            double nx = dy / L;
+                            double ny = -dx / L;
                             if (Math.abs(nx) > Math.abs(ny)) {
                                 fixed[2 * idx] = true;
                             } else {
@@ -184,13 +189,13 @@ public class PlaneStressSolver implements FEASolver {
             if (dl.getEdgeIndex() < 0 || dl.getEdgeIndex() >= edges.size()) continue;
 
             PolygonRegion.Edge edge = edges.get(dl.getEdgeIndex());
-            Node vStart = regionNodes.get(edge.getStartVertexIndex());
-            Node vEnd = regionNodes.get(edge.getEndVertexIndex());
+            PolygonRegion.Vertex pStart = region.getVertices().get(edge.getStartVertexIndex());
+            PolygonRegion.Vertex pEnd = region.getVertices().get(edge.getEndVertexIndex());
 
-            double x1 = vStart.getX();
-            double y1 = vStart.getY();
-            double x2 = vEnd.getX();
-            double y2 = vEnd.getY();
+            double x1 = pStart.getX();
+            double y1 = pStart.getY();
+            double x2 = pEnd.getX();
+            double y2 = pEnd.getY();
 
             // Find all nodes on this edge and sort them along the edge
             List<Node> edgeNodes = new ArrayList<>();
@@ -216,8 +221,9 @@ public class PlaneStressSolver implements FEASolver {
                 double fx1, fy1, fx2, fy2;
                 
                 if (dl.getType() == DistributedLoad.Type.UNIFORM) {
-                    double nx = -dy / L;
-                    double ny = dx / L;
+                    // Outward normal for CCW polygon is (dy/L, -dx/L)
+                    double nx = dy / L;
+                    double ny = -dx / L;
                     double tx = dx / L;
                     double ty = dy / L;
 

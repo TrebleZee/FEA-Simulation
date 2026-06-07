@@ -27,11 +27,21 @@ public interface MeshGenerator {
     }
 
     /**
-     * Generates a mesh for the given polygon region.
+     * Generates a mesh for the given polygon region with globally unique IDs.
      *
-     * @param region The polygon region to mesh.
-     * @param density Mesh density (e.g., maximum edge length or target number of elements).
-     * @return A MeshResult containing nodes and elements.
+     * @param region       The polygon region to mesh.
+     * @param density      Mesh density (target edge length; smaller = finer mesh).
+     * @param startNodeId  First node ID to assign; caller increments this by the node count
+     *                     before calling again for the next region.
+     * @param startElementId First element ID to assign; same contract as startNodeId.
+     * @return A MeshResult whose node and element IDs begin at the supplied offsets.
      */
-    MeshResult generateMesh(PolygonRegion region, double density);
+    MeshResult generateMesh(PolygonRegion region, double density, int startNodeId, int startElementId);
+
+    /**
+     * Convenience overload that starts IDs at 1 — safe for single-region models and tests.
+     */
+    default MeshResult generateMesh(PolygonRegion region, double density) {
+        return generateMesh(region, density, 1, 1);
+    }
 }

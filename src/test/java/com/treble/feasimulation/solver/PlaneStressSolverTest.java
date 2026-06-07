@@ -131,9 +131,9 @@ public class PlaneStressSolverTest {
         // Apply UNIFORM load on right edge (Edge from (1,0) to (1,1) is index 1)
         // Normal to right edge (assuming CCW vertices: (0,0)->(1,0)->(1,1)->(0,1))
         // dx=0, dy=1. Outward normal is (dy, -dx) = (1, 0).
-        // My solver uses nx = -dy/L, ny = dx/L.
-        // For edge 1: n1=(1,0), n2=(1,1). dx=0, dy=1. nx=-1, ny=0.
-        // This is INWARD normal. So wx=1000 should be COMPRESSION.
+        // My solver now uses nx = dy/L, ny = -dx/L for outward normal.
+        // For edge 1: n1=(1,0), n2=(1,1). dx=0, dy=1. nx=1, ny=0.
+        // This is OUTWARD normal. So wx=1000 should be TENSION.
         data.addDistributedLoad(new DistributedLoad(1, 1, 1, 1000, 0, DistributedLoad.Type.UNIFORM));
         
         PlaneStressSolver solver = new PlaneStressSolver();
@@ -145,8 +145,8 @@ public class PlaneStressSolverTest {
         int idx1 = result.getNodeIdToIndex().get(2); // Vertex 1: (1,0)
         int idx2 = result.getNodeIdToIndex().get(3); // Vertex 2: (1,1)
         
-        // Should have negative X displacement (compression)
-        assertTrue(result.getDisplacements()[2 * idx1] < 0);
-        assertTrue(result.getDisplacements()[2 * idx2] < 0);
+        // Should have positive X displacement (tension)
+        assertTrue(result.getDisplacements()[2 * idx1] > 0);
+        assertTrue(result.getDisplacements()[2 * idx2] > 0);
     }
 }

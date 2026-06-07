@@ -51,6 +51,8 @@ public class MainView {
     private final TextField youngsModulusField;
     private final TextField poissonRatioField;
     private final TextField thicknessField;
+    // Unit settings
+    private final TextField metersPerUnitField;
     private final Slider meshDensitySlider;
     private final Slider deformationScaleSlider;
     private final CheckBox showDisplacementArrowsCheckbox;
@@ -115,6 +117,9 @@ public class MainView {
         youngsModulusField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getYoungsModulus()));
         poissonRatioField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getPoissonRatio()));
         thicknessField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getThickness()));
+
+        // Units: user-defined scale (meters per model unit). Default = 1.0 (model unit = meter)
+        metersPerUnitField = new TextField("1.0");
 
         meshDensitySlider = new Slider(0.1, 10.0, 1.0);
         meshDensitySlider.setShowTickLabels(true);
@@ -190,6 +195,7 @@ public class MainView {
                 new Label("Young's Modulus (Pa):"), youngsModulusField,
                 new Label("Poisson's Ratio:"), poissonRatioField,
                 new Label("Thickness (m):"), thicknessField,
+                new Label("Units: meters per model unit:"), metersPerUnitField,
                 new Label("Mesh Density (Coarse -> Fine):"), meshDensitySlider,
                 new Label("Deformation Scale:"), deformationScaleSlider,
                 showDisplacementArrowsCheckbox,
@@ -245,6 +251,7 @@ public class MainView {
     public TextField getYoungsModulusField() { return youngsModulusField; }
     public TextField getPoissonRatioField() { return poissonRatioField; }
     public TextField getThicknessField() { return thicknessField; }
+    public TextField getMetersPerUnitField() { return metersPerUnitField; }
     public Slider getMeshDensitySlider() { return meshDensitySlider; }
     public Slider getDeformationScaleSlider() { return deformationScaleSlider; }
     public CheckBox getShowDisplacementArrowsCheckbox() { return showDisplacementArrowsCheckbox; }
