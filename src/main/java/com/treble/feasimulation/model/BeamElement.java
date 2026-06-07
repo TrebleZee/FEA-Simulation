@@ -4,7 +4,7 @@ package com.treble.feasimulation.model;
  * Simple 2D beam element representation connecting two node IDs with a material reference
  * and basic cross-section properties.
  */
-public class BeamElement extends Element {
+public class BeamElement extends StructuralElement {
     private final double inertia;    // second moment of area (I)
 
     public BeamElement(int id, int nodeStartId, int nodeEndId, int materialId, double area, double inertia) {

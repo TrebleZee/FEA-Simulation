@@ -40,6 +40,8 @@ public class MainView {
     private final Button placeSupportButton;
     private final TextField loadFxField;
     private final TextField loadFyField;
+    private final TextField poissonRatioField;
+    private final TextField thicknessField;
     private final Button applyLoadButton;
     private final Button updateLoadButton;
     private final Button runButton;
@@ -84,6 +86,9 @@ public class MainView {
         beamMaterialChoice = new ChoiceBox<>();
         beamMaterialChoice.getItems().addAll(MaterialLibrary.getPresets());
         beamMaterialChoice.setValue(MaterialLibrary.getDefaultMaterial());
+
+        poissonRatioField = new TextField("0.3");
+        thicknessField = new TextField("0.01");
 
         loadFxField = new TextField("0");
         loadFyField = new TextField("-1000");
@@ -134,6 +139,8 @@ public class MainView {
                 new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, trussModeButton,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Material:"), beamMaterialChoice,
+                new Label("Poisson's Ratio:"), poissonRatioField,
+                new Label("Thickness (m):"), thicknessField,
                 new Label("Point Load Fx:"), loadFxField,
                 new Label("Point Load Fy:"), loadFyField,
                 new Label("Click an element or node to place the load."), applyLoadButton, updateLoadButton,
@@ -168,6 +175,8 @@ public class MainView {
     public Button getPlaceSupportButton() { return placeSupportButton; }
     public TextField getLoadFxField() { return loadFxField; }
     public TextField getLoadFyField() { return loadFyField; }
+    public TextField getPoissonRatioField() { return poissonRatioField; }
+    public TextField getThicknessField() { return thicknessField; }
     public Button getApplyLoadButton() { return applyLoadButton; }
     public Button getUpdateLoadButton() { return updateLoadButton; }
     public Button getRunButton() { return runButton; }

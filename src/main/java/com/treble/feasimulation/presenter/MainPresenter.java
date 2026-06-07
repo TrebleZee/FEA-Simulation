@@ -6,7 +6,7 @@ import com.treble.feasimulation.model.MaterialLibrary;
 import com.treble.feasimulation.view.BeamCanvasView;
 import com.treble.feasimulation.view.MainView;
 import com.treble.feasimulation.service.ResultExplanationService;
-import com.treble.feasimulation.solver.BeamSolver;
+import com.treble.feasimulation.solver.*;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -195,32 +195,33 @@ public class MainPresenter implements Presenter {
                 return;
             }
 
-            // Run the solver
-            if (isPureTruss()) {
-                com.treble.feasimulation.solver.TrussSolver solver = new com.treble.feasimulation.solver.TrussSolver();
-                com.treble.feasimulation.solver.TrussSolver.Result r = solver.solve(model);
-                double scale = 100.0;
-                canvasView.showTrussResult(r, scale);
-                updateTrussStressSummary(r);
+            // Run the solver via factory
+            FEASolver solver = SolverFactory.getSolver(model);
+            SolverResult result = solver.solve(model);
 
-                // generate plain-English explanation and show in side panel
+            if (result instanceof TrussSolver.Result tr) {
+                double scale = 100.0;
+                canvasView.showTrussResult(tr, scale);
+                updateTrussStressSummary(tr);
+
                 ResultExplanationService expl = new ResultExplanationService();
-                String explanation = expl.explain(r, model);
+                String explanation = expl.explain(tr, model);
+                view.getExplanationArea().setText(explanation);
+            } else if (result instanceof BeamSolver.Result br) {
+                double scale = 100.0;
+                canvasView.showResult(br, scale);
+                updateStressSummary(br);
+
+                ResultExplanationService expl = new ResultExplanationService();
+                String explanation = expl.explain(br, model);
                 view.getExplanationArea().setText(explanation);
             } else {
-                BeamSolver solver = new BeamSolver();
-                BeamSolver.Result r = solver.solve(model);
-
-                // choose a visual scale (pixels per meter). Provide a simple heuristic
-                double scale = 100.0; // user-adjustable later
-                canvasView.showResult(r, scale);
-                updateStressSummary(r);
-
-                // generate plain-English explanation and show in side panel
-                ResultExplanationService expl = new ResultExplanationService();
-                String explanation = expl.explain(r, model);
-                view.getExplanationArea().setText(explanation);
+                // PlaneStressSolver or other future solvers
+                view.getExplanationArea().setText("Results for " + result.getClass().getSimpleName() + " are not yet visually supported.");
             }
+        } catch (UnsupportedOperationException uoe) {
+            showErrorDialog("Not Supported", uoe.getMessage());
+            view.getExplanationArea().setText(uoe.getMessage());
         } catch (IllegalStateException ise) {
             // solver-level numerical issues (singularity, etc.)
             view.clearStressSummary();

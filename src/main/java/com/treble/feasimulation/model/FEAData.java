@@ -17,6 +17,7 @@ public class FEAData {
     // new collections for beam-specific features
     private final List<Support> supports = new ArrayList<>();
     private final List<PointLoad> pointLoads = new ArrayList<>();
+    private final List<PolygonRegion> polygonRegions = new ArrayList<>();
 
     public void addNode(Node n) { nodes.add(n); }
     public void addElement(Element e) { elements.add(e); }
@@ -25,6 +26,7 @@ public class FEAData {
 
     public void addSupport(Support s) { supports.add(s); }
     public void addPointLoad(PointLoad p) { pointLoads.add(p); }
+    public void addPolygonRegion(PolygonRegion region) { polygonRegions.add(region); }
 
     public void clear() {
         nodes.clear();
@@ -32,6 +34,7 @@ public class FEAData {
         loads.clear();
         supports.clear();
         pointLoads.clear();
+        polygonRegions.clear();
     }
 
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
@@ -40,10 +43,12 @@ public class FEAData {
     public List<Load> getLoads() { return Collections.unmodifiableList(loads); }
     public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
     public List<PointLoad> getPointLoads() { return Collections.unmodifiableList(pointLoads); }
+    public List<PolygonRegion> getPolygonRegions() { return Collections.unmodifiableList(polygonRegions); }
 
     // Dedicated id generators for clarity
     public int nextSupportId() { return supports.stream().mapToInt(Support::getId).max().orElse(0) + 1; }
     public int nextPointLoadId() { return pointLoads.stream().mapToInt(PointLoad::getId).max().orElse(0) + 1; }
+    public int nextPolygonRegionId() { return polygonRegions.stream().mapToInt(PolygonRegion::getId).max().orElse(0) + 1; }
 
     // Removal helpers with cascade cleanup
     public boolean removeSupportById(int id) { return supports.removeIf(s -> s.getId() == id); }
@@ -51,6 +56,44 @@ public class FEAData {
 
     public boolean removeElementById(int id) {
         return elements.removeIf(e -> e.getId() == id);
+    }
+
+    public boolean removePolygonRegionById(int id) {
+        return polygonRegions.removeIf(r -> r.getId() == id);
+    }
+
+    /**
+     * Remove a vertex from a polygon. If the polygon would have fewer than 3 vertices,
+     * the entire polygon is removed instead.
+     *
+     * @return true if the polygon still exists after the operation
+     */
+    public boolean removePolygonVertex(int polygonId, int vertexIndex) {
+        Optional<PolygonRegion> opt = findPolygonRegionById(polygonId);
+        if (opt.isEmpty()) {
+            return false;
+        }
+        PolygonRegion region = opt.get();
+        if (region.getVertexCount() <= 3) {
+            removePolygonRegionById(polygonId);
+            return false;
+        }
+        region.removeVertex(vertexIndex);
+        return true;
+    }
+
+    public Optional<PolygonRegion> findPolygonRegionById(int id) {
+        return polygonRegions.stream().filter(r -> r.getId() == id).findFirst();
+    }
+
+    public boolean updatePolygonRegion(PolygonRegion updated) {
+        for (int i = 0; i < polygonRegions.size(); i++) {
+            if (polygonRegions.get(i).getId() == updated.getId()) {
+                polygonRegions.set(i, updated);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

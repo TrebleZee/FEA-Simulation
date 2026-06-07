@@ -61,7 +61,7 @@ import java.util.Map;
  * - Export to standard FEM formats
  * - Performance: sparse solver for large models
  */
-public class BeamSolver {
+public class BeamSolver implements FEASolver {
     private static final double DEFAULT_E = 2.0e11; // Pa, fallback
 
     /**
@@ -176,7 +176,7 @@ public class BeamSolver {
      * - eigenvalues: buckling modes / natural frequencies (Phase 2)
      * - convergence: number of iterations, residual (for nonlinear solvers)
      */
-    public static class Result {
+    public static class Result implements SolverResult {
         // global DOFs arranged [ux0, uy0, theta0, ux1, uy1, theta1, ...]
         public final double[] displacements;
         public final List<ElementResult> elementResults;
@@ -184,6 +184,11 @@ public class BeamSolver {
         public Result(double[] displacements, List<ElementResult> elementResults) {
             this.displacements = displacements;
             this.elementResults = elementResults;
+        }
+
+        @Override
+        public double[] getDisplacements() {
+            return displacements;
         }
     }
 

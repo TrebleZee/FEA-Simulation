@@ -6,7 +6,7 @@ import java.util.Arrays;
  * 2D Truss element representation connecting two node IDs.
  * Trusses only support axial forces (UX, UY) and do not support rotation.
  */
-public class TrussElement extends Element {
+public class TrussElement extends StructuralElement {
 
     public TrussElement(int id, int nodeStartId, int nodeEndId, int materialId, double area) {
         super(id, new int[]{nodeStartId, nodeEndId}, materialId, area);

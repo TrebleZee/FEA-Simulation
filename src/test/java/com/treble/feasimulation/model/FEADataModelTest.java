@@ -2,6 +2,8 @@ package com.treble.feasimulation.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FEADataModelTest {
@@ -141,6 +143,70 @@ public class FEADataModelTest {
             assertEquals(3, e.getMaterialId());
             assertEquals(0.05, e.getArea(), 1e-9);
         }
+    }
+
+    @Test
+    public void testPolygonRegionStorageAndRemoval() {
+        FEAData d = new FEAData();
+        List<PolygonRegion.Vertex> verts = List.of(
+                new PolygonRegion.Vertex(0, 0),
+                new PolygonRegion.Vertex(10, 0),
+                new PolygonRegion.Vertex(5, 8)
+        );
+        PolygonRegion region = new PolygonRegion(1, verts, 3);
+        d.addPolygonRegion(region);
+
+        assertEquals(1, d.getPolygonRegions().size());
+        assertEquals(3, d.getPolygonRegions().get(0).getVertexCount());
+        assertEquals(8, d.getPolygonRegions().get(0).getY(2), 1e-9);
+
+        d.getPolygonRegions().get(0).updateVertex(1, 12, 1);
+        assertEquals(12, d.findPolygonRegionById(1).get().getX(1), 1e-9);
+
+        assertTrue(d.removePolygonRegionById(1));
+        assertEquals(0, d.getPolygonRegions().size());
+    }
+
+    @Test
+    public void testPolygonVertexRemovalDropsSmallPolygon() {
+        FEAData d = new FEAData();
+        List<PolygonRegion.Vertex> verts = List.of(
+                new PolygonRegion.Vertex(0, 0),
+                new PolygonRegion.Vertex(10, 0),
+                new PolygonRegion.Vertex(5, 8)
+        );
+        d.addPolygonRegion(new PolygonRegion(1, verts, 3));
+
+        assertFalse(d.removePolygonVertex(1, 0));
+        assertEquals(0, d.getPolygonRegions().size());
+    }
+
+    @Test
+    public void testPolygonVertexRemovalKeepsValidPolygon() {
+        FEAData d = new FEAData();
+        List<PolygonRegion.Vertex> verts = List.of(
+                new PolygonRegion.Vertex(0, 0),
+                new PolygonRegion.Vertex(10, 0),
+                new PolygonRegion.Vertex(10, 10),
+                new PolygonRegion.Vertex(0, 10)
+        );
+        d.addPolygonRegion(new PolygonRegion(1, verts, 3));
+
+        assertTrue(d.removePolygonVertex(1, 2));
+        assertEquals(1, d.getPolygonRegions().size());
+        assertEquals(3, d.getPolygonRegions().get(0).getVertexCount());
+    }
+
+    @Test
+    public void testClearRemovesPolygonRegions() {
+        FEAData d = new FEAData();
+        d.addPolygonRegion(new PolygonRegion(1, List.of(
+                new PolygonRegion.Vertex(0, 0),
+                new PolygonRegion.Vertex(1, 0),
+                new PolygonRegion.Vertex(0, 1)
+        ), 1));
+        d.clear();
+        assertTrue(d.getPolygonRegions().isEmpty());
     }
 
     @Test

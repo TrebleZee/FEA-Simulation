@@ -19,14 +19,20 @@ public class MaterialLibraryTest {
                 () -> assertEquals(2.0e11, steel.getYoungsModulus(), 1e6),
                 () -> assertEquals(7850.0, steel.getDensity(), 1e-9),
                 () -> assertEquals(2.5e8, steel.getYieldStress(), 1e5),
+                () -> assertEquals(0.3, steel.getPoissonRatio(), 1e-9),
+                () -> assertEquals(0.01, steel.getThickness(), 1e-9),
                 () -> assertEquals(2, aluminium.getId()),
                 () -> assertEquals(6.9e10, aluminium.getYoungsModulus(), 1e6),
                 () -> assertEquals(2700.0, aluminium.getDensity(), 1e-9),
                 () -> assertEquals(1.5e8, aluminium.getYieldStress(), 1e5),
+                () -> assertEquals(0.33, aluminium.getPoissonRatio(), 1e-9),
+                () -> assertEquals(0.01, aluminium.getThickness(), 1e-9),
                 () -> assertEquals(3, wood.getId()),
                 () -> assertEquals(1.0e10, wood.getYoungsModulus(), 1e6),
                 () -> assertEquals(600.0, wood.getDensity(), 1e-9),
                 () -> assertEquals(4.0e7, wood.getYieldStress(), 1e4),
+                () -> assertEquals(0.3, wood.getPoissonRatio(), 1e-9),
+                () -> assertEquals(0.01, wood.getThickness(), 1e-9),
                 () -> assertSame(steel, MaterialLibrary.getDefaultMaterial())
         );
     }

@@ -12,7 +12,7 @@ import java.util.*;
  * Solver specialized for truss structures.
  * Assembles the global stiffness matrix using 2 DOFs per node (UX, UY).
  */
-public class TrussSolver {
+public class TrussSolver implements FEASolver {
 
     private static final double DEFAULT_E = 210e9;
 
@@ -32,7 +32,7 @@ public class TrussSolver {
         }
     }
 
-    public static class Result {
+    public static class Result implements SolverResult {
         public final double[] displacements; // [ux0, uy0, ux1, uy1, ...]
         public final List<ElementResult> elementResults;
         public final double maxDisplacement;
@@ -45,6 +45,11 @@ public class TrussSolver {
             this.maxDisplacement = maxDisplacement;
             this.maxStress = maxStress;
             this.minStress = minStress;
+        }
+
+        @Override
+        public double[] getDisplacements() {
+            return displacements;
         }
 
         /** Maximum tensile (positive) axial stress across all members, or 0 if none. */

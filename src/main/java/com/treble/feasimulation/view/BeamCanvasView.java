@@ -2,6 +2,7 @@ package com.treble.feasimulation.view;
 
 import com.treble.feasimulation.model.BeamElement;
 import com.treble.feasimulation.model.Element;
+import com.treble.feasimulation.model.PolygonRegion;
 import com.treble.feasimulation.model.TrussElement;
 import com.treble.feasimulation.model.TrussMember;
 import com.treble.feasimulation.model.TrussNode;
@@ -18,6 +19,7 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.paint.Color;
 
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,7 @@ import java.util.HashMap;
 
 import com.treble.feasimulation.model.Support;
 import com.treble.feasimulation.model.PointLoad;
+import com.treble.feasimulation.solver.SolverResult;
 
 public class BeamCanvasView {
     public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, NONE }
@@ -60,6 +63,18 @@ public class BeamCanvasView {
         }
     }
 
+    private static class PolygonVertexHit {
+        final int polygonId;
+        final int vertexIndex;
+        final double distance;
+
+        PolygonVertexHit(int polygonId, int vertexIndex, double distance) {
+            this.polygonId = polygonId;
+            this.vertexIndex = vertexIndex;
+            this.distance = distance;
+        }
+    }
+
     private final Canvas canvas;
     private final FEAData model;
 
@@ -72,12 +87,20 @@ public class BeamCanvasView {
     private double placingFy = -1000.0;
 
     private Integer draggingNodeId = null;
+    private Integer draggingPolygonId = null;
+    private Integer draggingPolygonVertexIndex = null;
 
     private Integer hoverElementId = null;
+    private Integer hoverPolygonId = null;
+
+    private final PolygonTool polygonTool = new PolygonTool();
+    private static final int IN_PROGRESS_POLYGON = -1;
 
     // result storage
     private com.treble.feasimulation.solver.BeamSolver.Result lastResult = null;
     private com.treble.feasimulation.solver.TrussSolver.Result lastTrussResult = null;
+    private SolverResult lastGenericResult = null;
+    private Visualizer activeVisualizer = null;
     private double lastScale = 1.0;
     private Runnable onModelUpdate;
     public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
@@ -88,6 +111,7 @@ public class BeamCanvasView {
 
     private static final double NODE_RADIUS = 5.0;
     private static final double HIT_TOLERANCE = 8.0;
+    private static final double POLYGON_CLOSE_TOLERANCE = 12.0;
 
     public BeamCanvasView(Canvas canvas, FEAData model) {
         this.canvas = canvas;
@@ -131,6 +155,49 @@ public class BeamCanvasView {
                 menu.getItems().add(delete);
             }
 
+            Optional<PolygonVertexHit> polygonVertexHit = findNearestPolygonVertex(p, HIT_TOLERANCE);
+            if (polygonVertexHit.isPresent()) {
+                PolygonVertexHit hit = polygonVertexHit.get();
+                if (hit.polygonId != IN_PROGRESS_POLYGON) {
+                    MenuItem deleteVertex = new MenuItem("Delete Polygon Vertex");
+                    deleteVertex.setOnAction(ae -> {
+                        model.removePolygonVertex(hit.polygonId, hit.vertexIndex);
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(deleteVertex);
+
+                    MenuItem deletePolygon = new MenuItem("Delete Polygon " + hit.polygonId);
+                    int pid = hit.polygonId;
+                    deletePolygon.setOnAction(ae -> {
+                        model.removePolygonRegionById(pid);
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(deletePolygon);
+                } else {
+                    MenuItem deleteVertex = new MenuItem("Delete Vertex");
+                    deleteVertex.setOnAction(ae -> {
+                        polygonTool.removeCurrentVertex(hit.vertexIndex);
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(deleteVertex);
+                }
+            } else {
+                Integer polygonAtPoint = findPolygonRegionAtPoint(p);
+                if (polygonAtPoint != null) {
+                    MenuItem deletePolygon = new MenuItem("Delete Polygon " + polygonAtPoint);
+                    int pid = polygonAtPoint;
+                    deletePolygon.setOnAction(ae -> {
+                        model.removePolygonRegionById(pid);
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(deletePolygon);
+                }
+            }
+
             int nearNodeForMenu = findNearestNodeId(p, HIT_TOLERANCE);
             if (nearNodeForMenu >= 0) {
                 // supports attached to this node
@@ -164,9 +231,16 @@ public class BeamCanvasView {
             return;
         }
 
-        // Left button may initiate node drag
+        // Left button may initiate vertex or node drag
         if (e.getButton() == MouseButton.PRIMARY) {
             Point2D p = new Point2D(e.getX(), e.getY());
+            Optional<PolygonVertexHit> polygonHit = findNearestPolygonVertex(p, HIT_TOLERANCE);
+            if (polygonHit.isPresent()) {
+                draggingPolygonId = polygonHit.get().polygonId;
+                draggingPolygonVertexIndex = polygonHit.get().vertexIndex;
+                e.consume();
+                return;
+            }
             int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
             if (nearNode >= 0) {
                 draggingNodeId = nearNode;
@@ -178,6 +252,13 @@ public class BeamCanvasView {
         Point2D p = new Point2D(e.getX(), e.getY());
         if (activeTool != null) {
             activeTool.onDrag(p, e);
+        }
+        if (draggingPolygonId != null && draggingPolygonVertexIndex != null) {
+            updatePolygonVertexPosition(draggingPolygonId, draggingPolygonVertexIndex, e.getX(), e.getY());
+            notifyModelUpdate();
+            redraw();
+            e.consume();
+            return;
         }
         if (draggingNodeId != null) {
             // Update node position while preserving its type
@@ -196,6 +277,8 @@ public class BeamCanvasView {
             activeTool.onRelease(new Point2D(e.getX(), e.getY()), e);
         }
         draggingNodeId = null;
+        draggingPolygonId = null;
+        draggingPolygonVertexIndex = null;
     }
 
     private void onMouseMoved(MouseEvent e) {
@@ -205,6 +288,7 @@ public class BeamCanvasView {
         }
         Integer el = findNearestElementId(p, HIT_TOLERANCE);
         if (el != null) hoverElementId = el; else hoverElementId = null;
+        hoverPolygonId = findPolygonRegionAtPoint(p);
         redraw();
     }
 
@@ -217,6 +301,8 @@ public class BeamCanvasView {
     public void redraw() {
         clear();
         GraphicsContext g = canvas.getGraphicsContext2D();
+        drawPolygonRegions(g);
+
         // draw elements (undeformed black)
         for (Element e : model.getElements()) {
             Optional<Node> s = model.findNodeById(e.getNodeStartId());
@@ -250,6 +336,10 @@ public class BeamCanvasView {
             drawDeformedShape(g, lastResult, lastScale);
         } else if (lastTrussResult != null) {
             drawTrussResult(g, lastTrussResult, lastScale);
+        }
+
+        if (activeVisualizer != null && lastGenericResult != null) {
+            activeVisualizer.render(lastGenericResult, lastScale);
         }
 
         // draw nodes
@@ -378,10 +468,12 @@ public class BeamCanvasView {
         if (mode == Mode.DRAW) {
             if (activeElementType == ElementType.TRUSS) {
                 activeTool = new TrussTool();
+                polygonTool.reset();
             } else if (activeElementType == ElementType.POLYGON) {
-                activeTool = new PolygonTool();
+                activeTool = polygonTool;
             } else {
                 activeTool = new BeamTool();
+                polygonTool.reset();
             }
         } else if (mode == Mode.PLACE_SUPPORT) {
             activeTool = new SupportTool();
@@ -400,6 +492,7 @@ public class BeamCanvasView {
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
         this.lastResult = r;
         this.lastTrussResult = null;
+        this.lastGenericResult = r;
         this.lastScale = scale;
         redraw();
     }
@@ -407,7 +500,13 @@ public class BeamCanvasView {
     public void showTrussResult(com.treble.feasimulation.solver.TrussSolver.Result r, double scale) {
         this.lastTrussResult = r;
         this.lastResult = null;
+        this.lastGenericResult = r;
         this.lastScale = scale;
+        redraw();
+    }
+
+    public void setVisualizer(Visualizer visualizer) {
+        this.activeVisualizer = visualizer;
         redraw();
     }
 
@@ -699,12 +798,212 @@ public class BeamCanvasView {
         }
     }
 
-    private class PolygonTool extends BaseElementTool {
-        @Override
-        protected void createElement(int s, int e) {
-            int eid = model.nextElementId();
-            model.addElement(new BeamElement(eid, s, e, placingBeamMaterialId, 1.0, 1.0));
+    private class PolygonTool implements CanvasTool {
+        private final List<Point2D> currentVertices = new ArrayList<>();
+        private Point2D mousePos;
+
+        void reset() {
+            currentVertices.clear();
+            mousePos = null;
         }
+
+        boolean isDrawing() {
+            return !currentVertices.isEmpty();
+        }
+
+        void removeCurrentVertex(int index) {
+            if (index >= 0 && index < currentVertices.size()) {
+                currentVertices.remove(index);
+            }
+        }
+
+        void updateCurrentVertex(int index, double x, double y) {
+            if (index >= 0 && index < currentVertices.size()) {
+                currentVertices.set(index, new Point2D(x, y));
+            }
+        }
+
+        private Optional<PolygonVertexHit> findNearestVertex(Point2D p, double tol) {
+            PolygonVertexHit best = null;
+            for (int i = 0; i < currentVertices.size(); i++) {
+                double d = p.distance(currentVertices.get(i));
+                if (d <= tol && (best == null || d < best.distance)) {
+                    best = new PolygonVertexHit(IN_PROGRESS_POLYGON, i, d);
+                }
+            }
+            return Optional.ofNullable(best);
+        }
+
+        @Override
+        public void onClick(Point2D p, MouseEvent e) {
+            if (e.getButton() != MouseButton.PRIMARY) return;
+
+            if (currentVertices.size() >= 3) {
+                Point2D first = currentVertices.get(0);
+                if (p.distance(first) <= POLYGON_CLOSE_TOLERANCE) {
+                    finalizePolygon();
+                    e.consume();
+                    return;
+                }
+            }
+
+            Optional<PolygonVertexHit> nearExisting = findNearestVertex(p, HIT_TOLERANCE);
+            if (nearExisting.isPresent()) {
+                return;
+            }
+
+            currentVertices.add(p);
+            notifyModelUpdate();
+            redraw();
+            e.consume();
+        }
+
+        private void finalizePolygon() {
+            List<PolygonRegion.Vertex> vertices = new ArrayList<>();
+            for (Point2D p : currentVertices) {
+                vertices.add(new PolygonRegion.Vertex(p.getX(), p.getY()));
+            }
+            PolygonRegion region = new PolygonRegion(model.nextPolygonRegionId(), vertices, placingBeamMaterialId);
+            model.addPolygonRegion(region);
+            currentVertices.clear();
+            mousePos = null;
+            notifyModelUpdate();
+            redraw();
+        }
+
+        @Override public void onDrag(Point2D p, MouseEvent e) { mousePos = p; redraw(); }
+        @Override public void onMove(Point2D p, MouseEvent e) { mousePos = p; redraw(); }
+        @Override public void onRelease(Point2D p, MouseEvent e) {}
+
+        @Override
+        public void drawOverlay(GraphicsContext g) {
+            if (currentVertices.isEmpty()) return;
+
+            double[] xs = new double[currentVertices.size()];
+            double[] ys = new double[currentVertices.size()];
+            for (int i = 0; i < currentVertices.size(); i++) {
+                xs[i] = currentVertices.get(i).getX();
+                ys[i] = currentVertices.get(i).getY();
+            }
+
+            g.setFill(Color.color(0.6, 0.8, 1.0, 0.25));
+            if (currentVertices.size() >= 3) {
+                g.fillPolygon(xs, ys, currentVertices.size());
+            }
+
+            g.setStroke(Color.DODGERBLUE);
+            g.setLineWidth(2);
+            g.setLineDashes(6);
+            for (int i = 0; i < currentVertices.size() - 1; i++) {
+                g.strokeLine(xs[i], ys[i], xs[i + 1], ys[i + 1]);
+            }
+            if (mousePos != null) {
+                Point2D last = currentVertices.get(currentVertices.size() - 1);
+                g.strokeLine(last.getX(), last.getY(), mousePos.getX(), mousePos.getY());
+                if (currentVertices.size() >= 3) {
+                    g.strokeLine(mousePos.getX(), mousePos.getY(), xs[0], ys[0]);
+                }
+            } else if (currentVertices.size() >= 3) {
+                g.strokeLine(xs[currentVertices.size() - 1], ys[currentVertices.size() - 1], xs[0], ys[0]);
+            }
+            g.setLineDashes(0);
+
+            g.setFill(Color.DODGERBLUE);
+            for (Point2D v : currentVertices) {
+                g.fillOval(v.getX() - NODE_RADIUS, v.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+            }
+
+            if (currentVertices.size() >= 3) {
+                Point2D first = currentVertices.get(0);
+                g.setStroke(Color.GREEN);
+                g.setLineWidth(2);
+                g.strokeOval(first.getX() - POLYGON_CLOSE_TOLERANCE, first.getY() - POLYGON_CLOSE_TOLERANCE,
+                        POLYGON_CLOSE_TOLERANCE * 2, POLYGON_CLOSE_TOLERANCE * 2);
+            }
+        }
+    }
+
+    private void drawPolygonRegions(GraphicsContext g) {
+        for (PolygonRegion region : model.getPolygonRegions()) {
+            int n = region.getVertexCount();
+            double[] xs = new double[n];
+            double[] ys = new double[n];
+            for (int i = 0; i < n; i++) {
+                xs[i] = region.getX(i);
+                ys[i] = region.getY(i);
+            }
+
+            boolean hovered = hoverPolygonId != null && hoverPolygonId == region.getId();
+            g.setFill(Color.color(0.55, 0.75, 0.95, hovered ? 0.45 : 0.3));
+            g.fillPolygon(xs, ys, n);
+
+            g.setStroke(hovered ? Color.ORANGE : Color.STEELBLUE);
+            g.setLineWidth(hovered ? 3 : 2);
+            g.strokePolygon(xs, ys, n);
+
+            g.setFill(Color.STEELBLUE);
+            for (int i = 0; i < n; i++) {
+                g.fillOval(xs[i] - NODE_RADIUS, ys[i] - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+            }
+
+            double cx = 0, cy = 0;
+            for (int i = 0; i < n; i++) { cx += xs[i]; cy += ys[i]; }
+            g.setFill(Color.DARKBLUE);
+            g.fillText("P" + region.getId(), cx / n + 4, cy / n - 4);
+        }
+    }
+
+    private Optional<PolygonVertexHit> findNearestPolygonVertex(Point2D p, double tol) {
+        PolygonVertexHit best = null;
+
+        for (PolygonRegion region : model.getPolygonRegions()) {
+            for (int i = 0; i < region.getVertexCount(); i++) {
+                double d = p.distance(region.getX(i), region.getY(i));
+                if (d <= tol && (best == null || d < best.distance)) {
+                    best = new PolygonVertexHit(region.getId(), i, d);
+                }
+            }
+        }
+
+        if (activeElementType == ElementType.POLYGON) {
+            Optional<PolygonVertexHit> inProgress = polygonTool.findNearestVertex(p, tol);
+            if (inProgress.isPresent() && (best == null || inProgress.get().distance < best.distance)) {
+                best = inProgress.get();
+            }
+        }
+
+        return Optional.ofNullable(best);
+    }
+
+    private void updatePolygonVertexPosition(int polygonId, int vertexIndex, double x, double y) {
+        if (polygonId == IN_PROGRESS_POLYGON) {
+            polygonTool.updateCurrentVertex(vertexIndex, x, y);
+            return;
+        }
+        model.findPolygonRegionById(polygonId).ifPresent(region -> region.updateVertex(vertexIndex, x, y));
+    }
+
+    private Integer findPolygonRegionAtPoint(Point2D p) {
+        Integer best = null;
+        for (PolygonRegion region : model.getPolygonRegions()) {
+            if (isPointInsidePolygon(p, region)) {
+                best = region.getId();
+            }
+        }
+        return best;
+    }
+
+    private boolean isPointInsidePolygon(Point2D p, PolygonRegion region) {
+        boolean inside = false;
+        int n = region.getVertexCount();
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            double xi = region.getX(i), yi = region.getY(i);
+            double xj = region.getX(j), yj = region.getY(j);
+            boolean intersect = ((yi > p.getY()) != (yj > p.getY()))
+                    && (p.getX() < (xj - xi) * (p.getY() - yi) / (yj - yi + 0.0) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
 
     private Node createNodeForCurrentContext(int id, double x, double y) {
