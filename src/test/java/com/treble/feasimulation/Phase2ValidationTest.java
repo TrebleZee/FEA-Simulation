@@ -56,7 +56,7 @@ public class Phase2ValidationTest {
         data.addSupport(new Support(1, 1, Support.Type.FIXED));
         
         TrussSolver solver = new TrussSolver();
-        Exception exception = assertThrows(RuntimeException.class, () -> {
+        Exception exception = assertThrows(IllegalStateException.class, () -> {
             solver.solve(data);
         });
         

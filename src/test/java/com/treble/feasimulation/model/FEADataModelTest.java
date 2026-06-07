@@ -125,6 +125,25 @@ public class FEADataModelTest {
     }
 
     @Test
+    public void testSplitTrussElementAtPoint() {
+        FEAData d = new FEAData();
+        d.addNode(new TrussNode(1, 0.0, 0.0));
+        d.addNode(new TrussNode(2, 10.0, 0.0));
+        d.addElement(new TrussMember(1, 1, 2, 3, 0.05));
+
+        int newNodeId = d.splitElementAtPoint(1, 6.0, 0.0);
+
+        assertEquals(3, newNodeId);
+        assertEquals(2, d.getElements().size());
+        assertTrue(d.findNodeById(newNodeId).get() instanceof TrussNode);
+        for (Element e : d.getElements()) {
+            assertTrue(e instanceof TrussMember);
+            assertEquals(3, e.getMaterialId());
+            assertEquals(0.05, e.getArea(), 1e-9);
+        }
+    }
+
+    @Test
     public void testNodeCopyAtPreservesType() {
         Node n = new Node(1, 10, 20);
         Node n2 = n.copyAt(15, 25);

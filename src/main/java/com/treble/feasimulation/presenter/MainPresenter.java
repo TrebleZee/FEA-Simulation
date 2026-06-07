@@ -187,7 +187,7 @@ public class MainPresenter implements Presenter {
     private void runSimulation() {
         try {
             // Perform validation
-            ValidationResult validation = validateModel();
+            ModelValidator.ValidationResult validation = ModelValidator.validate(model);
             if (!validation.isValid()) {
                 showErrorDialog("Simulation Validation Failed", validation.getErrorMessage());
                 view.clearStressSummary();
@@ -242,193 +242,6 @@ public class MainPresenter implements Presenter {
     }
 
     /**
-     * Validation result holder.
-     */
-    private static class ValidationResult {
-        private final boolean valid;
-        private final String errorMessage;
-
-        ValidationResult(boolean valid, String errorMessage) {
-            this.valid = valid;
-            this.errorMessage = errorMessage;
-        }
-
-        boolean isValid() {
-            return valid;
-        }
-
-        String getErrorMessage() {
-            return errorMessage;
-        }
-
-        static ValidationResult success() {
-            return new ValidationResult(true, "");
-        }
-
-        static ValidationResult failure(String message) {
-            return new ValidationResult(false, message);
-        }
-    }
-
-    /**
-     * Validate the model before running simulation.
-     * Checks for:
-     * 1. At least one element
-     * 2. At least one support
-     * 3. No floating (disconnected) beams
-     * 4. Valid geometry (no zero-length elements)
-     */
-    private ValidationResult validateModel() {
-        // Check: at least one element
-        if (model.getElements().isEmpty()) {
-            return ValidationResult.failure(
-                    "Validation failed: No beam elements defined.\n\n" +
-                    "Please draw at least one beam on the canvas before running the simulation."
-            );
-        }
-
-        // Check: at least one support
-        if (model.getSupports().isEmpty()) {
-            return ValidationResult.failure(
-                    "Validation failed: No supports defined.\n\n" +
-                    "The structure is statically unstable. Please add at least one support\n" +
-                    "(fixed, pinned, or roller) to a node."
-            );
-        }
-
-        // Check: no floating beams (all elements must be connected)
-        String floatingBeamError = checkForFloatingBeams();
-        if (floatingBeamError != null) {
-            return ValidationResult.failure(floatingBeamError);
-        }
-
-        // Check: valid geometry (no zero-length elements)
-        String geometryError = checkGeometry();
-        if (geometryError != null) {
-            return ValidationResult.failure(geometryError);
-        }
-
-        return ValidationResult.success();
-    }
-
-    /**
-     * Check if any beams are floating (disconnected from the rest of the structure).
-     * Uses union-find to verify all supported nodes are connected.
-     * Returns null if valid, or an error message if floating beams detected.
-     */
-    private String checkForFloatingBeams() {
-        if (model.getElements().isEmpty()) {
-            return null; // already checked elsewhere
-        }
-
-        // Collect all nodes involved in elements
-        java.util.Set<Integer> nodeSet = new java.util.HashSet<>();
-        for (var elem : model.getElements()) {
-            nodeSet.add(elem.getNodeStartId());
-            nodeSet.add(elem.getNodeEndId());
-        }
-
-        if (nodeSet.isEmpty()) {
-            return null;
-        }
-
-        // Collect all supported nodes
-        java.util.Set<Integer> supportedNodes = new java.util.HashSet<>();
-        for (var support : model.getSupports()) {
-            supportedNodes.add(support.getNodeId());
-        }
-
-        // Build connectivity using union-find
-        java.util.Map<Integer, Integer> parent = new java.util.HashMap<>();
-        for (int node : nodeSet) {
-            parent.put(node, node);
-        }
-
-        java.util.function.BiConsumer<Integer, Integer> union = (a, b) -> {
-            int rootA = find(parent, a);
-            int rootB = find(parent, b);
-            if (rootA != rootB) {
-                parent.put(rootB, rootA);
-            }
-        };
-
-        // Union all connected elements
-        for (var elem : model.getElements()) {
-            union.accept(elem.getNodeStartId(), elem.getNodeEndId());
-        }
-
-        // Check if all supported nodes belong to the same component
-        if (supportedNodes.isEmpty()) {
-            return null;
-        }
-
-        Integer firstRoot = null;
-        for (int supportedNode : supportedNodes) {
-            int root = find(parent, supportedNode);
-            if (firstRoot == null) {
-                firstRoot = root;
-            } else if (firstRoot != root) {
-                return "Validation failed: Floating beam detected.\n\n" +
-                       "Not all supports are connected to the same structure.\n" +
-                       "Please ensure all beams form a single connected network,\n" +
-                       "or connect supports only to the same component.";
-            }
-        }
-
-        // Check if any unsupported nodes exist in a separate component
-        for (int node : nodeSet) {
-            if (!supportedNodes.contains(node)) {
-                int nodeRoot = find(parent, node);
-                if (firstRoot == null || nodeRoot != firstRoot) {
-                    return "Validation failed: Floating beam detected.\n\n" +
-                           "Some beam elements are not connected to any supported node.\n" +
-                           "Please ensure all beams are connected to nodes with supports.";
-                }
-            }
-        }
-
-        return null; // validation passed
-    }
-
-    /**
-     * Union-find helper: get the root of a node.
-     */
-    private int find(java.util.Map<Integer, Integer> parent, int node) {
-        int p = parent.get(node);
-        if (p == node) {
-            return node;
-        }
-        int root = find(parent, p);
-        parent.put(node, root); // path compression
-        return root;
-    }
-
-    /**
-     * Check for geometry issues like zero-length elements.
-     * Returns null if valid, or an error message if issues detected.
-     */
-    private String checkGeometry() {
-        for (var elem : model.getElements()) {
-            var startNode = model.findNodeById(elem.getNodeStartId());
-            var endNode = model.findNodeById(elem.getNodeEndId());
-
-            if (startNode.isEmpty() || endNode.isEmpty()) {
-                return "Validation failed: Element " + elem.getId() + " references missing node.";
-            }
-
-            double dx = endNode.get().getX() - startNode.get().getX();
-            double dy = endNode.get().getY() - startNode.get().getY();
-            double length = Math.hypot(dx, dy);
-
-            if (length <= 1e-12) {
-                return "Validation failed: Element " + elem.getId() + " has zero or near-zero length.\n\n" +
-                       "Both nodes are at the same location. Please adjust the geometry.";
-            }
-        }
-        return null; // validation passed
-    }
-
-    /**
      * Show a user-friendly error dialog.
      */
     private void showErrorDialog(String title, String message) {
@@ -453,8 +266,12 @@ public class MainPresenter implements Presenter {
     }
 
     private void updateTrussStressSummary(com.treble.feasimulation.solver.TrussSolver.Result result) {
-        view.getMaxTensileStressLabel().setText(String.format("%.3e Pa", result.maxStress));
-        view.getMaxCompressiveStressLabel().setText(String.format("%.3e Pa", result.minStress));
+        double maxTensile = result.getMaxTensileStress();
+        double maxCompressive = result.getMaxCompressiveStress();
+        view.getMaxTensileStressLabel().setText(
+                maxTensile > 0 ? String.format("%.3e Pa", maxTensile) : "N/A");
+        view.getMaxCompressiveStressLabel().setText(
+                maxCompressive < 0 ? String.format("%.3e Pa", maxCompressive) : "N/A");
     }
 
     private void updateStressSummary(BeamSolver.Result result) {

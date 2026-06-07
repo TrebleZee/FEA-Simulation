@@ -133,13 +133,6 @@ public class BeamCanvasView {
 
             int nearNodeForMenu = findNearestNodeId(p, HIT_TOLERANCE);
             if (nearNodeForMenu >= 0) {
-                MenuItem deleteNode = new MenuItem("Delete Node");
-                deleteNode.setOnAction(ae -> {
-                    model.removeNodeById(nearNodeForMenu);
-                    redraw();
-                });
-                menu.getItems().add(deleteNode);
-
                 // supports attached to this node
                 for (com.treble.feasimulation.model.Support s : model.getSupports()) {
                     if (s.getNodeId() == nearNodeForMenu) {
@@ -234,14 +227,19 @@ public class BeamCanvasView {
                     g.setStroke(Color.ORANGE);
                     g.setLineWidth(3);
                 } else {
-                    g.setStroke(e instanceof TrussElement ? Color.GRAY : Color.BLACK);
+                    Color base = e instanceof TrussElement ? Color.GRAY : Color.BLACK;
+                    if (lastTrussResult != null || lastResult != null) {
+                        g.setStroke(Color.color(base.getRed(), base.getGreen(), base.getBlue(), 0.2));
+                    } else {
+                        g.setStroke(base);
+                    }
                     g.setLineWidth(2);
                 }
                 g.strokeLine(ns.getX(), ns.getY(), nt.getX(), nt.getY());
                 // draw id label
                 double mx = (ns.getX() + nt.getX()) / 2.0;
                 double my = (ns.getY() + nt.getY()) / 2.0;
-                g.setFill(Color.BLUE);
+                g.setFill(lastTrussResult != null || lastResult != null ? Color.color(0, 0, 1, 0.2) : Color.BLUE);
                 g.fillText((e instanceof TrussElement ? "T" : "E") + e.getId(), mx + 4, my - 4);
             }
         }
@@ -255,9 +253,17 @@ public class BeamCanvasView {
         }
 
         // draw nodes
-        g.setFill(Color.RED);
-        for (Node n : model.getNodes()) {
-            g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+        if (lastTrussResult == null && lastResult == null) {
+            g.setFill(Color.RED);
+            for (Node n : model.getNodes()) {
+                g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+            }
+        } else {
+            // draw original nodes faint
+            g.setFill(Color.color(1, 0, 0, 0.3));
+            for (Node n : model.getNodes()) {
+                g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+            }
         }
 
         // draw supports
@@ -412,7 +418,13 @@ public class BeamCanvasView {
         for (int i = 0; i < nodes.size(); i++) nodeIndex.put(nodes.get(i).getId(), i);
 
         double maxAbsForce = 0;
-        for (var er : r.elementResults) maxAbsForce = Math.max(maxAbsForce, Math.abs(er.axialForce));
+        double maxTensionForce = 0;
+        double maxCompressionForce = 0;
+        for (var er : r.elementResults) {
+            maxAbsForce = Math.max(maxAbsForce, Math.abs(er.axialForce));
+            if (er.axialForce > maxTensionForce) maxTensionForce = er.axialForce;
+            if (er.axialForce < maxCompressionForce) maxCompressionForce = er.axialForce;
+        }
 
         for (com.treble.feasimulation.solver.TrussSolver.ElementResult er : r.elementResults) {
             Integer si = nodeIndex.get(er.nodeStartId);
@@ -433,19 +445,73 @@ public class BeamCanvasView {
             double y2_def = nt.getY() + v2 * scale;
 
             // Color: Tension = Red, Compression = Blue
-            double intensity = maxAbsForce > 0 ? Math.abs(er.axialForce) / maxAbsForce : 1.0;
-            if (er.axialForce > 1e-6) {
-                // Tension
-                g.setStroke(Color.color(1.0, 1.0 - intensity * 0.8, 1.0 - intensity * 0.8));
-            } else if (er.axialForce < -1e-6) {
-                // Compression
-                g.setStroke(Color.color(1.0 - intensity * 0.8, 1.0 - intensity * 0.8, 1.0));
-            } else {
-                g.setStroke(Color.GRAY);
-            }
+            g.setStroke(getTrussColor(er.axialForce, maxAbsForce));
             g.setLineWidth(3);
             g.strokeLine(x1_def, y1_def, x2_def, y2_def);
         }
+
+        // Draw deformed nodes
+        g.setFill(Color.DARKRED);
+        for (int i = 0; i < nodes.size(); i++) {
+            Node n = nodes.get(i);
+            double u = r.displacements[2 * i];
+            double v = r.displacements[2 * i + 1];
+            double x_def = n.getX() + u * scale;
+            double y_def = n.getY() + v * scale;
+            g.fillOval(x_def - NODE_RADIUS, y_def - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
+        }
+
+        drawTrussLegend(g, maxTensionForce, maxCompressionForce);
+    }
+
+    private Color getTrussColor(double force, double maxAbsForce) {
+        if (maxAbsForce < 1e-9) return Color.GRAY;
+        double intensity = Math.min(1.0, Math.abs(force) / maxAbsForce);
+        if (force > 1e-6) {
+            // Tension: Red
+            return Color.LIGHTGRAY.interpolate(Color.RED, intensity);
+        } else if (force < -1e-6) {
+            // Compression: Blue
+            return Color.LIGHTGRAY.interpolate(Color.BLUE, intensity);
+        } else {
+            return Color.GRAY;
+        }
+    }
+
+    private void drawTrussLegend(GraphicsContext g, double maxTensionForce, double maxCompressionForce) {
+        double x = 10;
+        double y = canvas.getHeight() - 100;
+        double w = 180;
+        double h = 90;
+
+        g.setFill(Color.color(1, 1, 1, 0.85));
+        g.fillRect(x, y, w, h);
+        g.setStroke(Color.BLACK);
+        g.setLineWidth(1);
+        g.strokeRect(x, y, w, h);
+
+        g.setFill(Color.BLACK);
+        g.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 12));
+        g.fillText("Truss Analysis Legend", x + 10, y + 20);
+
+        g.setFont(javafx.scene.text.Font.font("System", 11));
+        
+        // Tension
+        g.setFill(Color.RED);
+        g.fillRect(x + 10, y + 30, 20, 10);
+        g.setFill(Color.BLACK);
+        g.fillText(String.format("Tension (Max: %.2e N)", maxTensionForce), x + 35, y + 39);
+
+        // Compression
+        g.setFill(Color.BLUE);
+        g.fillRect(x + 10, y + 50, 20, 10);
+        g.setFill(Color.BLACK);
+        g.fillText(String.format("Compression (Max: %.2e N)", Math.abs(maxCompressionForce)), x + 35, y + 59);
+
+        g.setFill(Color.DARKRED);
+        g.fillOval(x + 10, y + 70, 10, 10);
+        g.setFill(Color.BLACK);
+        g.fillText("Deformed Nodes", x + 35, y + 79);
     }
 
     private void drawDeformedShape(GraphicsContext g, com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {

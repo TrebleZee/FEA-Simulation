@@ -46,6 +46,42 @@ public class TrussSolver {
             this.maxStress = maxStress;
             this.minStress = minStress;
         }
+
+        /** Maximum tensile (positive) axial stress across all members, or 0 if none. */
+        public double getMaxTensileStress() {
+            return elementResults.stream()
+                    .mapToDouble(er -> er.axialStress)
+                    .filter(s -> s > 0)
+                    .max()
+                    .orElse(0.0);
+        }
+
+        /** Maximum compressive (most negative) axial stress across all members, or 0 if none. */
+        public double getMaxCompressiveStress() {
+            return elementResults.stream()
+                    .mapToDouble(er -> er.axialStress)
+                    .filter(s -> s < 0)
+                    .min()
+                    .orElse(0.0);
+        }
+
+        /** Maximum tensile axial force, or 0 if none. */
+        public double getMaxTensileForce() {
+            return elementResults.stream()
+                    .mapToDouble(er -> er.axialForce)
+                    .filter(f -> f > 0)
+                    .max()
+                    .orElse(0.0);
+        }
+
+        /** Maximum compressive (most negative) axial force, or 0 if none. */
+        public double getMaxCompressiveForce() {
+            return elementResults.stream()
+                    .mapToDouble(er -> er.axialForce)
+                    .filter(f -> f < 0)
+                    .min()
+                    .orElse(0.0);
+        }
     }
 
     public Result solve(FEAData data) {
@@ -147,7 +183,7 @@ public class TrussSolver {
         DMatrixRMaj xred = new DMatrixRMaj(freeCount, 1);
         LinearSolverDense<DMatrixRMaj> solver = LinearSolverFactory_DDRM.lu(freeCount);
         if (!solver.setA(Ared)) {
-            throw new RuntimeException("Singular stiffness matrix (structure unstable or insufficient supports)");
+            throw new IllegalStateException("Singular stiffness matrix (structure unstable or insufficient supports)");
         }
 
         // Check diagonal elements for zero stiffness (indicates a mechanism)
@@ -159,7 +195,7 @@ public class TrussSolver {
                 int ni = globalDof / 2;
                 int node_id = nodes.get(ni).getId();
                 String dofName = (globalDof % 2 == 0) ? "UX" : "UY";
-                throw new RuntimeException(String.format("Unstable structure: node %d has zero stiffness in %s. Check connectivity and supports.", node_id, dofName));
+                throw new IllegalStateException(String.format("Unstable structure: node %d has zero stiffness in %s. Check connectivity and supports.", node_id, dofName));
             }
         }
 
