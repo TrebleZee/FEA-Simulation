@@ -36,6 +36,9 @@ public class MainPresenter implements Presenter {
         view.getBeamMaterialChoice().getSelectionModel().selectedItemProperty().addListener((obs, oldMaterial, newMaterial) -> {
             if (newMaterial != null) {
                 canvasView.setPlacingBeamMaterialId(newMaterial.getId());
+                view.getYoungsModulusField().setText(String.valueOf(newMaterial.getYoungsModulus()));
+                view.getPoissonRatioField().setText(String.valueOf(newMaterial.getPoissonRatio()));
+                view.getThicknessField().setText(String.valueOf(newMaterial.getThickness()));
             }
         });
 
@@ -114,14 +117,48 @@ public class MainPresenter implements Presenter {
         });
 
         canvasView.setOnModelUpdate(this::refreshTables);
+        canvasView.setOnElementSelected(stress -> {
+            view.getSelectedSigmaXLabel().setText(String.format("%.3e Pa", stress.sigmaX));
+            view.getSelectedSigmaYLabel().setText(String.format("%.3e Pa", stress.sigmaY));
+            view.getSelectedTauXYLabel().setText(String.format("%.3e Pa", stress.tauXY));
+            view.getSelectedVonMisesLabel().setText(String.format("%.3e Pa", stress.vonMises));
+        });
         view.getLoadFxField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
         view.getLoadFyField().textProperty().addListener((obs, oldV, newV) -> updatePlacingLoad());
 
         setupTables();
         refreshTables();
 
-        // Run simulation
-        view.getRunButton().setOnAction(e -> runSimulation());
+        view.getRunButton().setOnAction(e -> {
+            updateModelMaterialFromUI();
+            runSimulation();
+        });
+    }
+
+    private void updateModelMaterialFromUI() {
+        Material selectedMaterial = view.getBeamMaterialChoice().getValue();
+        if (selectedMaterial != null) {
+            try {
+                double e = Double.parseDouble(view.getYoungsModulusField().getText());
+                double nu = Double.parseDouble(view.getPoissonRatioField().getText());
+                double t = Double.parseDouble(view.getThicknessField().getText());
+                
+                Material updated = new Material(
+                    selectedMaterial.getId(),
+                    selectedMaterial.getName(),
+                    e,
+                    selectedMaterial.getDensity(),
+                    selectedMaterial.getYieldStress(),
+                    nu,
+                    t
+                );
+                
+                model.removeMaterialById(selectedMaterial.getId());
+                model.addMaterial(updated);
+            } catch (NumberFormatException ex) {
+                // ignore invalid input, will use existing material properties
+            }
+        }
     }
 
     private void updatePlacingLoad() {
@@ -223,6 +260,13 @@ public class MainPresenter implements Presenter {
                 ResultExplanationService expl = new ResultExplanationService();
                 String explanation = expl.explain(br, model);
                 view.getExplanationArea().setText(explanation);
+            } else if (result instanceof com.treble.feasimulation.solver.PlaneStressResult psr) {
+                double scale = 1.0; // Use 1.0 for overlay on undeformed mesh
+                canvasView.showPlaneStressResult(psr, scale);
+                updatePlaneStressSummary(psr);
+
+                view.getExplanationArea().setText("Plane Stress Analysis completed.\nHeatmap shows von Mises stress distribution.\nMax von Mises stress: " + 
+                    String.format("%.3e Pa", psr.getElementStresses().stream().mapToDouble(s -> s.vonMises).max().orElse(0)));
             } else {
                 // PlaneStressSolver or other future solvers
                 view.getExplanationArea().setText("Results for " + result.getClass().getSimpleName() + " are not yet visually supported.");
@@ -281,6 +325,12 @@ public class MainPresenter implements Presenter {
                 maxTensile > 0 ? String.format("%.3e Pa", maxTensile) : "N/A");
         view.getMaxCompressiveStressLabel().setText(
                 maxCompressive < 0 ? String.format("%.3e Pa", maxCompressive) : "N/A");
+    }
+
+    private void updatePlaneStressSummary(com.treble.feasimulation.solver.PlaneStressResult result) {
+        double maxVonMises = result.getElementStresses().stream().mapToDouble(s -> s.vonMises).max().orElse(0);
+        view.getMaxTensileStressLabel().setText(String.format("%.3e Pa", maxVonMises));
+        view.getMaxCompressiveStressLabel().setText("N/A");
     }
 
     private void updateStressSummary(BeamSolver.Result result) {

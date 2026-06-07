@@ -114,8 +114,14 @@ public class BeamCanvasView {
     // result storage
     private com.treble.feasimulation.solver.BeamSolver.Result lastResult = null;
     private com.treble.feasimulation.solver.TrussSolver.Result lastTrussResult = null;
+    private com.treble.feasimulation.solver.PlaneStressResult lastPlaneStressResult = null;
     private SolverResult lastGenericResult = null;
     private Visualizer activeVisualizer = null;
+    private java.util.function.Consumer<com.treble.feasimulation.solver.PlaneStressResult.ElementStress> onElementSelected;
+
+    public void setOnElementSelected(java.util.function.Consumer<com.treble.feasimulation.solver.PlaneStressResult.ElementStress> callback) {
+        this.onElementSelected = callback;
+    }
     private double lastScale = 1.0;
     private Runnable onModelUpdate;
     public void setOnModelUpdate(Runnable r) { this.onModelUpdate = r; }
@@ -146,9 +152,38 @@ public class BeamCanvasView {
     }
 
     private void onMouseClicked(MouseEvent e) {
-        if (activeTool != null) {
-            activeTool.onClick(new Point2D(e.getX(), e.getY()), e);
+        Point2D p = new Point2D(e.getX(), e.getY());
+        if (lastPlaneStressResult != null && onElementSelected != null) {
+            for (com.treble.feasimulation.model.TriangularElement element : lastPlaneStressResult.getElements()) {
+                if (isPointInTriangle(p, element)) {
+                    lastPlaneStressResult.getElementStresses().stream()
+                            .filter(s -> s.elementId == element.getId())
+                            .findFirst()
+                            .ifPresent(onElementSelected);
+                    break;
+                }
+            }
         }
+
+        if (activeTool != null) {
+            activeTool.onClick(p, e);
+        }
+    }
+
+    private boolean isPointInTriangle(Point2D p, com.treble.feasimulation.model.TriangularElement tri) {
+        com.treble.feasimulation.model.Node[] nodes = tri.getNodes();
+        double x1 = nodes[0].getX(), y1 = nodes[0].getY();
+        double x2 = nodes[1].getX(), y2 = nodes[1].getY();
+        double x3 = nodes[2].getX(), y3 = nodes[2].getY();
+        double px = p.getX(), py = p.getY();
+
+        double denominator = ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
+        if (Math.abs(denominator) < 1e-9) return false;
+        double a = ((y2 - y3) * (px - x3) + (x3 - x2) * (py - y3)) / denominator;
+        double b = ((y3 - y1) * (px - x3) + (x1 - x3) * (py - y3)) / denominator;
+        double c = 1 - a - b;
+
+        return a >= -1e-9 && a <= 1.000000001 && b >= -1e-9 && b <= 1.000000001 && c >= -1e-9 && c <= 1.000000001;
     }
 
     private void onMousePressed(MouseEvent e) {
@@ -398,6 +433,8 @@ public class BeamCanvasView {
             drawDeformedShape(g, lastResult, lastScale);
         } else if (lastTrussResult != null) {
             drawTrussResult(g, lastTrussResult, lastScale);
+        } else if (lastPlaneStressResult != null) {
+            drawPlaneStressResult(g, lastPlaneStressResult);
         }
 
         if (activeVisualizer != null && lastGenericResult != null) {
@@ -405,7 +442,7 @@ public class BeamCanvasView {
         }
 
         // draw nodes
-        if (lastTrussResult == null && lastResult == null) {
+        if (lastTrussResult == null && lastResult == null && lastPlaneStressResult == null) {
             g.setFill(Color.RED);
             for (Node n : model.getNodes()) {
                 g.fillOval(n.getX() - NODE_RADIUS, n.getY() - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
@@ -554,6 +591,7 @@ public class BeamCanvasView {
     public void showResult(com.treble.feasimulation.solver.BeamSolver.Result r, double scale) {
         this.lastResult = r;
         this.lastTrussResult = null;
+        this.lastPlaneStressResult = null;
         this.lastGenericResult = r;
         this.lastScale = scale;
         redraw();
@@ -562,6 +600,16 @@ public class BeamCanvasView {
     public void showTrussResult(com.treble.feasimulation.solver.TrussSolver.Result r, double scale) {
         this.lastTrussResult = r;
         this.lastResult = null;
+        this.lastPlaneStressResult = null;
+        this.lastGenericResult = r;
+        this.lastScale = scale;
+        redraw();
+    }
+
+    public void showPlaneStressResult(com.treble.feasimulation.solver.PlaneStressResult r, double scale) {
+        this.lastPlaneStressResult = r;
+        this.lastResult = null;
+        this.lastTrussResult = null;
         this.lastGenericResult = r;
         this.lastScale = scale;
         redraw();
@@ -570,6 +618,87 @@ public class BeamCanvasView {
     public void setVisualizer(Visualizer visualizer) {
         this.activeVisualizer = visualizer;
         redraw();
+    }
+
+    private void drawPlaneStressResult(GraphicsContext g, com.treble.feasimulation.solver.PlaneStressResult r) {
+        double maxVonMises = 0;
+        for (com.treble.feasimulation.solver.PlaneStressResult.ElementStress es : r.getElementStresses()) {
+            if (es.vonMises > maxVonMises) maxVonMises = es.vonMises;
+        }
+
+        for (com.treble.feasimulation.model.TriangularElement element : r.getElements()) {
+            com.treble.feasimulation.solver.PlaneStressResult.ElementStress stress = r.getElementStresses().stream()
+                    .filter(s -> s.elementId == element.getId())
+                    .findFirst().orElse(null);
+
+            if (stress == null) continue;
+
+            Node[] nodes = element.getNodes();
+            double[] xs = {nodes[0].getX(), nodes[1].getX(), nodes[2].getX()};
+            double[] ys = {nodes[0].getY(), nodes[1].getY(), nodes[2].getY()};
+
+            g.setFill(getHeatmapColor(stress.vonMises, 0, maxVonMises));
+            g.fillPolygon(xs, ys, 3);
+
+            // Draw element edges
+            g.setStroke(Color.color(0, 0, 0, 0.1));
+            g.setLineWidth(0.5);
+            g.strokePolygon(xs, ys, 3);
+        }
+
+        drawHeatmapLegend(g, 0, maxVonMises);
+    }
+
+    private Color getHeatmapColor(double value, double min, double max) {
+        if (max - min < 1e-9) return Color.BLUE;
+        double ratio = (value - min) / (max - min);
+
+        // Blue (0) -> Green (0.5) -> Red (1.0)
+        if (ratio < 0.5) {
+            double localRatio = ratio * 2.0; // 0 to 1
+            return Color.BLUE.interpolate(Color.GREEN, localRatio);
+        } else {
+            double localRatio = (ratio - 0.5) * 2.0; // 0 to 1
+            return Color.GREEN.interpolate(Color.RED, localRatio);
+        }
+    }
+
+    private void drawHeatmapLegend(GraphicsContext g, double min, double max) {
+        double x = 10;
+        double y = canvas.getHeight() - 150;
+        double w = 200;
+        double h = 140;
+
+        g.setFill(Color.color(1, 1, 1, 0.85));
+        g.fillRect(x, y, w, h);
+        g.setStroke(Color.BLACK);
+        g.setLineWidth(1);
+        g.strokeRect(x, y, w, h);
+
+        g.setFill(Color.BLACK);
+        g.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 12));
+        g.fillText("Von Mises Stress (Pa)", x + 10, y + 20);
+
+        double barX = x + 10;
+        double barY = y + 30;
+        double barW = 20;
+        double barH = 100;
+
+        // Draw gradient bar
+        for (int i = 0; i < (int)barH; i++) {
+            double val = max - (i / barH) * (max - min);
+            g.setStroke(getHeatmapColor(val, min, max));
+            g.strokeLine(barX, barY + i, barX + barW, barY + i);
+        }
+        g.setStroke(Color.BLACK);
+        g.strokeRect(barX, barY, barW, barH);
+
+        // Labels
+        g.setFill(Color.BLACK);
+        g.setFont(javafx.scene.text.Font.font("System", 11));
+        g.fillText(String.format("%.2e", max), barX + barW + 5, barY + 10);
+        g.fillText(String.format("%.2e", (max + min) / 2), barX + barW + 5, barY + barH / 2 + 5);
+        g.fillText(String.format("%.2e", min), barX + barW + 5, barY + barH);
     }
 
     private void drawTrussResult(GraphicsContext g, com.treble.feasimulation.solver.TrussSolver.Result r, double scale) {

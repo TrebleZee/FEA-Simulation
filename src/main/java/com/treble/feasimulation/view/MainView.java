@@ -42,6 +42,7 @@ public class MainView {
     private final Button placeSupportButton;
     private final TextField loadFxField;
     private final TextField loadFyField;
+    private final TextField youngsModulusField;
     private final TextField poissonRatioField;
     private final TextField thicknessField;
     private final Slider meshDensitySlider;
@@ -50,6 +51,10 @@ public class MainView {
     private final Button runButton;
     private final Label maxTensileStressLabel;
     private final Label maxCompressiveStressLabel;
+    private Label selectedSigmaXLabel;
+    private Label selectedSigmaYLabel;
+    private Label selectedTauXYLabel;
+    private Label selectedVonMisesLabel;
     private final TextArea explanationArea;
     private final javafx.scene.control.TableView<com.treble.feasimulation.model.PointLoad> pointLoadTable;
     private final javafx.scene.control.TableView<com.treble.feasimulation.model.Support> supportTable;
@@ -91,8 +96,9 @@ public class MainView {
         beamMaterialChoice.getItems().addAll(MaterialLibrary.getPresets());
         beamMaterialChoice.setValue(MaterialLibrary.getDefaultMaterial());
 
-        poissonRatioField = new TextField("0.3");
-        thicknessField = new TextField("0.01");
+        youngsModulusField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getYoungsModulus()));
+        poissonRatioField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getPoissonRatio()));
+        thicknessField = new TextField(String.valueOf(MaterialLibrary.getDefaultMaterial().getThickness()));
 
         meshDensitySlider = new Slider(0.1, 10.0, 1.0);
         meshDensitySlider.setShowTickLabels(true);
@@ -140,6 +146,11 @@ public class MainView {
         Label maxTensileStressLabel = new Label("N/A");
         Label maxCompressiveStressLabel = new Label("N/A");
 
+        selectedSigmaXLabel = new Label("N/A");
+        selectedSigmaYLabel = new Label("N/A");
+        selectedTauXYLabel = new Label("N/A");
+        selectedVonMisesLabel = new Label("N/A");
+
         TextArea explanationArea = new TextArea();
         explanationArea.setEditable(false);
         explanationArea.setWrapText(true);
@@ -150,6 +161,7 @@ public class MainView {
                 new Label("Drawing Tool:"), elementTypeChoice, drawElementButton, drawPolygonButton, trussModeButton,
                 new Label("Supports:"), supportTypeChoice, placeSupportButton,
                 new Label("Material:"), beamMaterialChoice,
+                new Label("Young's Modulus (Pa):"), youngsModulusField,
                 new Label("Poisson's Ratio:"), poissonRatioField,
                 new Label("Thickness (m):"), thicknessField,
                 new Label("Mesh Density (Coarse -> Fine):"), meshDensitySlider,
@@ -160,6 +172,11 @@ public class MainView {
                 new Label(""), runButton,
                 new Label("Max Tensile Stress:"), maxTensileStressLabel,
                 new Label("Max Compressive Stress:"), maxCompressiveStressLabel,
+                new Label("--- Selected Element Stresses ---"),
+                new Label("Sigma X (Pa):"), selectedSigmaXLabel,
+                new Label("Sigma Y (Pa):"), selectedSigmaYLabel,
+                new Label("Tau XY (Pa):"), selectedTauXYLabel,
+                new Label("Von Mises (Pa):"), selectedVonMisesLabel,
                 new Label("Analysis Explanation:"), explanationArea);
         side.setPadding(new Insets(8));
         side.setPrefWidth(320);
@@ -188,6 +205,7 @@ public class MainView {
     public Button getPlaceSupportButton() { return placeSupportButton; }
     public TextField getLoadFxField() { return loadFxField; }
     public TextField getLoadFyField() { return loadFyField; }
+    public TextField getYoungsModulusField() { return youngsModulusField; }
     public TextField getPoissonRatioField() { return poissonRatioField; }
     public TextField getThicknessField() { return thicknessField; }
     public Slider getMeshDensitySlider() { return meshDensitySlider; }
@@ -196,6 +214,10 @@ public class MainView {
     public Button getRunButton() { return runButton; }
     public Label getMaxTensileStressLabel() { return maxTensileStressLabel; }
     public Label getMaxCompressiveStressLabel() { return maxCompressiveStressLabel; }
+    public Label getSelectedSigmaXLabel() { return selectedSigmaXLabel; }
+    public Label getSelectedSigmaYLabel() { return selectedSigmaYLabel; }
+    public Label getSelectedTauXYLabel() { return selectedTauXYLabel; }
+    public Label getSelectedVonMisesLabel() { return selectedVonMisesLabel; }
     public TextArea getExplanationArea() { return explanationArea; }
     public TableView<PointLoad> getPointLoadTable() { return pointLoadTable; }
     public TableView<Support> getSupportTable() { return supportTable; }
@@ -203,5 +225,9 @@ public class MainView {
     public void clearStressSummary() {
         maxTensileStressLabel.setText("N/A");
         maxCompressiveStressLabel.setText("N/A");
+        selectedSigmaXLabel.setText("N/A");
+        selectedSigmaYLabel.setText("N/A");
+        selectedTauXYLabel.setText("N/A");
+        selectedVonMisesLabel.setText("N/A");
     }
 }

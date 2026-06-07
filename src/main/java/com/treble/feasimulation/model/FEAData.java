@@ -63,6 +63,7 @@ public class FEAData {
     // Removal helpers with cascade cleanup
     public boolean removeSupportById(int id) { return supports.removeIf(s -> s.getId() == id); }
     public boolean removePointLoadById(int id) { return pointLoads.removeIf(p -> p.getId() == id); }
+    public boolean removeMaterialById(int id) { return materials.removeIf(m -> m.getId() == id); }
 
     public boolean removeElementById(int id) {
         return elements.removeIf(e -> e.getId() == id);
