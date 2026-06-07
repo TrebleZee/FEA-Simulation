@@ -30,7 +30,7 @@ import com.treble.feasimulation.model.PointLoad;
 import com.treble.feasimulation.solver.SolverResult;
 
 public class BeamCanvasView {
-    public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, NONE }
+    public enum Mode { DRAW, PLACE_SUPPORT, PLACE_LOAD, POLYGON, NONE }
     public enum ElementType { BEAM, TRUSS, POLYGON }
 
     private interface CanvasTool {
@@ -465,12 +465,12 @@ public class BeamCanvasView {
     public ElementType getPlacingElementType() { return activeElementType; }
 
     private void updateActiveTool() {
-        if (mode == Mode.DRAW) {
-            if (activeElementType == ElementType.TRUSS) {
+        if (mode == Mode.DRAW || mode == Mode.POLYGON) {
+            if (mode == Mode.POLYGON || activeElementType == ElementType.POLYGON) {
+                activeTool = polygonTool;
+            } else if (activeElementType == ElementType.TRUSS) {
                 activeTool = new TrussTool();
                 polygonTool.reset();
-            } else if (activeElementType == ElementType.POLYGON) {
-                activeTool = polygonTool;
             } else {
                 activeTool = new BeamTool();
                 polygonTool.reset();
@@ -836,11 +836,18 @@ public class BeamCanvasView {
 
         @Override
         public void onClick(Point2D p, MouseEvent e) {
+            if (e.getButton() == MouseButton.SECONDARY) {
+                if (currentVertices.size() >= 3) {
+                    finalizePolygon();
+                    e.consume();
+                }
+                return;
+            }
             if (e.getButton() != MouseButton.PRIMARY) return;
 
             if (currentVertices.size() >= 3) {
                 Point2D first = currentVertices.get(0);
-                if (p.distance(first) <= POLYGON_CLOSE_TOLERANCE) {
+                if (p.distance(first) <= POLYGON_CLOSE_TOLERANCE || e.getClickCount() > 1) {
                     finalizePolygon();
                     e.consume();
                     return;
