@@ -75,6 +75,18 @@ public class BeamCanvasView {
         }
     }
 
+    private static class PolygonEdgeHit {
+        final int polygonId;
+        final int edgeIndex;
+        final double distance;
+
+        PolygonEdgeHit(int polygonId, int edgeIndex, double distance) {
+            this.polygonId = polygonId;
+            this.edgeIndex = edgeIndex;
+            this.distance = distance;
+        }
+    }
+
     private final Canvas canvas;
     private final FEAData model;
 
@@ -89,6 +101,9 @@ public class BeamCanvasView {
     private Integer draggingNodeId = null;
     private Integer draggingPolygonId = null;
     private Integer draggingPolygonVertexIndex = null;
+
+    private Integer selectedPolygonId = null;
+    private Integer selectedEdgeIndex = null;
 
     private Integer hoverElementId = null;
     private Integer hoverPolygonId = null;
@@ -185,16 +200,51 @@ public class BeamCanvasView {
                     menu.getItems().add(deleteVertex);
                 }
             } else {
-                Integer polygonAtPoint = findPolygonRegionAtPoint(p);
-                if (polygonAtPoint != null) {
-                    MenuItem deletePolygon = new MenuItem("Delete Polygon " + polygonAtPoint);
-                    int pid = polygonAtPoint;
-                    deletePolygon.setOnAction(ae -> {
+                Optional<PolygonEdgeHit> edgeHit = findNearestPolygonEdge(p, HIT_TOLERANCE);
+                if (edgeHit.isPresent()) {
+                    PolygonEdgeHit hit = edgeHit.get();
+                    selectedPolygonId = hit.polygonId;
+                    selectedEdgeIndex = hit.edgeIndex;
+                    redraw();
+
+                    MenuItem addSupport = new MenuItem("Add Support to Edge");
+                    addSupport.setOnAction(ae -> {
+                        model.addEdgeSupport(new com.treble.feasimulation.model.EdgeSupport(
+                                model.nextEdgeSupportId(), hit.polygonId, hit.edgeIndex, placingSupportType));
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(addSupport);
+
+                    MenuItem addLoad = new MenuItem("Add Distributed Load to Edge");
+                    addLoad.setOnAction(ae -> {
+                        model.addDistributedLoad(new com.treble.feasimulation.model.DistributedLoad(
+                                model.nextDistributedLoadId(), hit.polygonId, hit.edgeIndex, placingFx, placingFy));
+                        notifyModelUpdate();
+                        redraw();
+                    });
+                    menu.getItems().add(addLoad);
+
+                    MenuItem deleteEdge = new MenuItem("Delete Edge (and Polygon)");
+                    int pid = hit.polygonId;
+                    deleteEdge.setOnAction(ae -> {
                         model.removePolygonRegionById(pid);
                         notifyModelUpdate();
                         redraw();
                     });
-                    menu.getItems().add(deletePolygon);
+                    menu.getItems().add(deleteEdge);
+                } else {
+                    Integer polygonAtPoint = findPolygonRegionAtPoint(p);
+                    if (polygonAtPoint != null) {
+                        MenuItem deletePolygon = new MenuItem("Delete Polygon " + polygonAtPoint);
+                        int pid = polygonAtPoint;
+                        deletePolygon.setOnAction(ae -> {
+                            model.removePolygonRegionById(pid);
+                            notifyModelUpdate();
+                            redraw();
+                        });
+                        menu.getItems().add(deletePolygon);
+                    }
                 }
             }
 
@@ -238,9 +288,21 @@ public class BeamCanvasView {
             if (polygonHit.isPresent()) {
                 draggingPolygonId = polygonHit.get().polygonId;
                 draggingPolygonVertexIndex = polygonHit.get().vertexIndex;
+                selectedPolygonId = null;
+                selectedEdgeIndex = null;
                 e.consume();
                 return;
             }
+            Optional<PolygonEdgeHit> edgeHit = findNearestPolygonEdge(p, HIT_TOLERANCE);
+            if (edgeHit.isPresent()) {
+                selectedPolygonId = edgeHit.get().polygonId;
+                selectedEdgeIndex = edgeHit.get().edgeIndex;
+                redraw();
+                e.consume();
+                return;
+            }
+            selectedPolygonId = null;
+            selectedEdgeIndex = null;
             int nearNode = findNearestNodeId(p, HIT_TOLERANCE);
             if (nearNode >= 0) {
                 draggingNodeId = nearNode;
@@ -948,6 +1010,31 @@ public class BeamCanvasView {
             g.setLineWidth(hovered ? 3 : 2);
             g.strokePolygon(xs, ys, n);
 
+            // Highlight selected edge
+            if (selectedPolygonId != null && selectedPolygonId == region.getId() && selectedEdgeIndex != null) {
+                int i = selectedEdgeIndex;
+                int j = (i + 1) % n;
+                g.setStroke(Color.RED);
+                g.setLineWidth(4);
+                g.strokeLine(xs[i], ys[i], xs[j], ys[j]);
+            }
+
+            // Draw edge-based boundary conditions
+            for (com.treble.feasimulation.model.EdgeSupport s : model.getEdgeSupports()) {
+                if (s.getPolygonId() == region.getId()) {
+                    int i = s.getEdgeIndex();
+                    int j = (i + 1) % n;
+                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.GREEN, "S");
+                }
+            }
+            for (com.treble.feasimulation.model.DistributedLoad l : model.getDistributedLoads()) {
+                if (l.getPolygonId() == region.getId()) {
+                    int i = l.getEdgeIndex();
+                    int j = (i + 1) % n;
+                    drawEdgeIndicator(g, xs[i], ys[i], xs[j], ys[j], Color.ORANGERED, "W");
+                }
+            }
+
             g.setFill(Color.STEELBLUE);
             for (int i = 0; i < n; i++) {
                 g.fillOval(xs[i] - NODE_RADIUS, ys[i] - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
@@ -958,6 +1045,40 @@ public class BeamCanvasView {
             g.setFill(Color.DARKBLUE);
             g.fillText("P" + region.getId(), cx / n + 4, cy / n - 4);
         }
+    }
+
+    private void drawEdgeIndicator(GraphicsContext g, double x1, double y1, double x2, double y2, Color color, String label) {
+        double mx = (x1 + x2) / 2;
+        double my = (y1 + y2) / 2;
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double len = Math.hypot(dx, dy);
+        if (len < 1e-6) return;
+        double nx = -dy / len;
+        double ny = dx / len;
+
+        g.setStroke(color);
+        g.setLineWidth(2);
+        g.strokeLine(mx, my, mx + nx * 15, my + ny * 15);
+        g.setFill(color);
+        g.fillText(label, mx + nx * 20, my + ny * 20);
+    }
+
+    private Optional<PolygonEdgeHit> findNearestPolygonEdge(Point2D p, double tol) {
+        PolygonEdgeHit best = null;
+        for (PolygonRegion region : model.getPolygonRegions()) {
+            int n = region.getVertexCount();
+            for (int i = 0; i < n; i++) {
+                int j = (i + 1) % n;
+                Point2D p1 = new Point2D(region.getX(i), region.getY(i));
+                Point2D p2 = new Point2D(region.getX(j), region.getY(j));
+                SegmentProjection proj = projectPointOntoSegment(p, p1, p2);
+                if (proj.distance <= tol && (best == null || proj.distance < best.distance)) {
+                    best = new PolygonEdgeHit(region.getId(), i, proj.distance);
+                }
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     private Optional<PolygonVertexHit> findNearestPolygonVertex(Point2D p, double tol) {

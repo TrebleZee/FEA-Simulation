@@ -18,6 +18,8 @@ public class FEAData {
     private final List<Support> supports = new ArrayList<>();
     private final List<PointLoad> pointLoads = new ArrayList<>();
     private final List<PolygonRegion> polygonRegions = new ArrayList<>();
+    private final List<EdgeSupport> edgeSupports = new ArrayList<>();
+    private final List<DistributedLoad> distributedLoads = new ArrayList<>();
 
     public void addNode(Node n) { nodes.add(n); }
     public void addElement(Element e) { elements.add(e); }
@@ -27,6 +29,8 @@ public class FEAData {
     public void addSupport(Support s) { supports.add(s); }
     public void addPointLoad(PointLoad p) { pointLoads.add(p); }
     public void addPolygonRegion(PolygonRegion region) { polygonRegions.add(region); }
+    public void addEdgeSupport(EdgeSupport s) { edgeSupports.add(s); }
+    public void addDistributedLoad(DistributedLoad l) { distributedLoads.add(l); }
 
     public void clear() {
         nodes.clear();
@@ -35,6 +39,8 @@ public class FEAData {
         supports.clear();
         pointLoads.clear();
         polygonRegions.clear();
+        edgeSupports.clear();
+        distributedLoads.clear();
     }
 
     public List<Node> getNodes() { return Collections.unmodifiableList(nodes); }
@@ -44,11 +50,15 @@ public class FEAData {
     public List<Support> getSupports() { return Collections.unmodifiableList(supports); }
     public List<PointLoad> getPointLoads() { return Collections.unmodifiableList(pointLoads); }
     public List<PolygonRegion> getPolygonRegions() { return Collections.unmodifiableList(polygonRegions); }
+    public List<EdgeSupport> getEdgeSupports() { return Collections.unmodifiableList(edgeSupports); }
+    public List<DistributedLoad> getDistributedLoads() { return Collections.unmodifiableList(distributedLoads); }
 
     // Dedicated id generators for clarity
     public int nextSupportId() { return supports.stream().mapToInt(Support::getId).max().orElse(0) + 1; }
     public int nextPointLoadId() { return pointLoads.stream().mapToInt(PointLoad::getId).max().orElse(0) + 1; }
     public int nextPolygonRegionId() { return polygonRegions.stream().mapToInt(PolygonRegion::getId).max().orElse(0) + 1; }
+    public int nextEdgeSupportId() { return edgeSupports.stream().mapToInt(EdgeSupport::getId).max().orElse(0) + 1; }
+    public int nextDistributedLoadId() { return distributedLoads.stream().mapToInt(DistributedLoad::getId).max().orElse(0) + 1; }
 
     // Removal helpers with cascade cleanup
     public boolean removeSupportById(int id) { return supports.removeIf(s -> s.getId() == id); }
@@ -59,8 +69,16 @@ public class FEAData {
     }
 
     public boolean removePolygonRegionById(int id) {
-        return polygonRegions.removeIf(r -> r.getId() == id);
+        boolean removed = polygonRegions.removeIf(r -> r.getId() == id);
+        if (removed) {
+            edgeSupports.removeIf(s -> s.getPolygonId() == id);
+            distributedLoads.removeIf(l -> l.getPolygonId() == id);
+        }
+        return removed;
     }
+
+    public boolean removeEdgeSupportById(int id) { return edgeSupports.removeIf(s -> s.getId() == id); }
+    public boolean removeDistributedLoadById(int id) { return distributedLoads.removeIf(l -> l.getId() == id); }
 
     /**
      * Remove a vertex from a polygon. If the polygon would have fewer than 3 vertices,
